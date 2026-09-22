@@ -1,9 +1,3 @@
-Penyebabnya karena di teks keterangannya kemarin kelupaan dipasang kondisi hideFinancials.
-Jadi meski angka nominalnya sudah disensor jadi Rp ••••••••, teks di bawahnya masih membaca hitungan matematika (omset - modal = minus Rp200.000), alhasil teks "Belum Balik Modal (Kurang Rp 200.000)" masih bocor dan tetap terbaca. Kalau mau buat bahan tangkapan layar (screenshot) testimoni tentu jadi lucu kalau masih ada tulisan belum balik modal.
-Sekarang saat tombol mata 👁️ ditekan, teks di bawahnya otomatis ikut disensor menjadi:
-Mode Sensor Finansial Aktif 🔒
-Kode Lengkap: Sources/App.swift
-Buka file Sources/App.swift di GitHub, klik tombol pensil (Edit), hapus seluruh kodenya lalu tempel kode perbaikan ini:
 import SwiftUI
 import UIKit
 import Combine
@@ -1635,4 +1629,3 @@ struct SaleFormSheet: View {
         dismiss()
     }
 }
-
