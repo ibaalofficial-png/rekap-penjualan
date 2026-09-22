@@ -3,7 +3,7 @@ import UIKit
 import Combine
 import UniformTypeIdentifiers
 
-// MARK: - Helper Manajer File Sertifikat
+// MARK: - Manajer Penyimpanan Berkas ZIP Sertifikat
 class CertStorageManager {
     static let shared = CertStorageManager()
 
@@ -16,7 +16,7 @@ class CertStorageManager {
         return dir
     }
 
-    func saveFile(from sourceURL: URL, for itemId: UUID, extensionName: String) -> String? {
+    func saveZip(from sourceURL: URL, for itemId: UUID) -> String? {
         let canAccess = sourceURL.startAccessingSecurityScopedResource()
         defer {
             if canAccess { sourceURL.stopAccessingSecurityScopedResource() }
@@ -24,7 +24,8 @@ class CertStorageManager {
 
         do {
             let data = try Data(contentsOf: sourceURL)
-            let fileName = "\(itemId.uuidString)_\(extensionName).\(sourceURL.pathExtension)"
+            let ext = sourceURL.pathExtension.isEmpty ? "zip" : sourceURL.pathExtension
+            let fileName = "\(itemId.uuidString)_cert.\(ext)"
             let destURL = certsDirectory.appendingPathComponent(fileName)
             try data.write(to: destURL)
             return fileName
@@ -57,9 +58,8 @@ struct SaleItem: Identifiable, Codable {
     var durasiHari: Int
     var catatan: String
 
-    // Berkas Sertifikat (Opsional)
-    var p12FileName: String? = nil
-    var provisionFileName: String? = nil
+    // Berkas ZIP Sertifikat (Opsional)
+    var zipFileName: String? = nil
     var certPassword: String? = nil
 
     var untung: Int {
@@ -75,8 +75,8 @@ struct SaleItem: Identifiable, Codable {
         return clean.hasPrefix("@") || clean.contains("t.me/")
     }
 
-    var hasCertFiles: Bool {
-        return p12FileName != nil || provisionFileName != nil
+    var hasCertZip: Bool {
+        return zipFileName != nil
     }
 
     var displayName: String {
@@ -100,10 +100,10 @@ struct SaleItem: Identifiable, Codable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, tanggalDaftar, namaBuyer, kontakBuyer, udid, modal, hargaJual, durasiHari, catatan, p12FileName, provisionFileName, certPassword
+        case id, tanggalDaftar, namaBuyer, kontakBuyer, udid, modal, hargaJual, durasiHari, catatan, zipFileName, certPassword
     }
 
-    init(id: UUID = UUID(), tanggalDaftar: Date, namaBuyer: String, kontakBuyer: String, udid: String, modal: Int, hargaJual: Int, durasiHari: Int, catatan: String, p12FileName: String? = nil, provisionFileName: String? = nil, certPassword: String? = nil) {
+    init(id: UUID = UUID(), tanggalDaftar: Date, namaBuyer: String, kontakBuyer: String, udid: String, modal: Int, hargaJual: Int, durasiHari: Int, catatan: String, zipFileName: String? = nil, certPassword: String? = nil) {
         self.id = id
         self.tanggalDaftar = tanggalDaftar
         self.namaBuyer = namaBuyer
@@ -113,8 +113,7 @@ struct SaleItem: Identifiable, Codable {
         self.hargaJual = hargaJual
         self.durasiHari = durasiHari
         self.catatan = catatan
-        self.p12FileName = p12FileName
-        self.provisionFileName = provisionFileName
+        self.zipFileName = zipFileName
         self.certPassword = certPassword
     }
 
@@ -130,8 +129,7 @@ struct SaleItem: Identifiable, Codable {
         hargaJual = try container.decodeIfPresent(Int.self, forKey: .hargaJual) ?? 0
         durasiHari = try container.decodeIfPresent(Int.self, forKey: .durasiHari) ?? 365
         catatan = try container.decodeIfPresent(String.self, forKey: .catatan) ?? ""
-        p12FileName = try container.decodeIfPresent(String.self, forKey: .p12FileName)
-        provisionFileName = try container.decodeIfPresent(String.self, forKey: .provisionFileName)
+        zipFileName = try container.decodeIfPresent(String.self, forKey: .zipFileName)
         certPassword = try container.decodeIfPresent(String.self, forKey: .certPassword)
     }
 }
@@ -217,7 +215,6 @@ struct ContentView: View {
     @State private var searchText = ""
     @State private var selectedFilter: FilterGaransi = .semua
 
-    // Share Sheet (Backup atau Share Cert)
     @State private var shareItems: [Any] = []
     @State private var showShareSheet = false
     @State private var showFileImporter = false
@@ -363,8 +360,7 @@ struct ContentView: View {
                     }
                 } onDelete: { deletedId in
                     if let itemToDelete = items.first(where: { $0.id == deletedId }) {
-                        CertStorageManager.shared.deleteFile(fileName: itemToDelete.p12FileName)
-                        CertStorageManager.shared.deleteFile(fileName: itemToDelete.provisionFileName)
+                        CertStorageManager.shared.deleteFile(fileName: itemToDelete.zipFileName)
                     }
                     items.removeAll { $0.id == deletedId }
                     saveData()
@@ -495,19 +491,19 @@ struct ContentView: View {
                 }
             }
 
-            // Tampilan Sertifikat (Jika Ada Dilampirkan)
-            if item.hasCertFiles || (item.certPassword != nil && !item.certPassword!.isEmpty) {
+            // Tampilan Tombol Kirim ZIP Cert (Jika Tersedia)
+            if item.hasCertZip || (item.certPassword != nil && !item.certPassword!.isEmpty) {
                 HStack(spacing: 8) {
-                    if item.hasCertFiles {
+                    if item.hasCertZip {
                         Button {
-                            shareCertFiles(item: item)
+                            shareCertZip(item: item)
                         } label: {
-                            Label("Kirim Cert 📦", systemImage: "square.and.arrow.up.fill")
+                            Label("Kirim ZIP Cert 📦", systemImage: "doc.zipper")
                                 .font(.system(size: 11, weight: .bold))
                                 .padding(.horizontal, 10)
-                                .padding(.vertical, 5)
+                                .padding(.vertical, 6)
                                 .background(Color.blue.opacity(0.2))
-                                .foregroundColor(.blue)
+                                .foregroundColor(.cyan)
                                 .cornerRadius(6)
                         }
                     }
@@ -522,7 +518,7 @@ struct ContentView: View {
                             }
                             .font(.system(size: 11, weight: .semibold))
                             .padding(.horizontal, 8)
-                            .padding(.vertical, 5)
+                            .padding(.vertical, 6)
                             .background(Color.yellow.opacity(0.15))
                             .foregroundColor(.yellow)
                             .cornerRadius(6)
@@ -557,6 +553,7 @@ struct ContentView: View {
             .background(Color.black.opacity(0.25))
             .cornerRadius(8)
 
+            // Catatan Perangkat
             if !item.catatan.isEmpty && item.catatan != "-" {
                 Text("📱 \(item.catatan)")
                     .font(.caption2)
@@ -588,17 +585,9 @@ struct ContentView: View {
         .padding(.horizontal)
     }
 
-    private func shareCertFiles(item: SaleItem) {
-        var filesToShare: [URL] = []
-        if let p12 = item.p12FileName, let url = CertStorageManager.shared.getFileURL(fileName: p12) {
-            filesToShare.append(url)
-        }
-        if let prov = item.provisionFileName, let url = CertStorageManager.shared.getFileURL(fileName: prov) {
-            filesToShare.append(url)
-        }
-
-        if !filesToShare.isEmpty {
-            shareItems = filesToShare
+    private func shareCertZip(item: SaleItem) {
+        if let zipName = item.zipFileName, let url = CertStorageManager.shared.getFileURL(fileName: zipName) {
+            shareItems = [url]
             showShareSheet = true
         }
     }
@@ -701,7 +690,7 @@ struct ContentView: View {
     }
 }
 
-// MARK: - Formulir Tambah / Edit Penjualan dengan Cert Opsional
+// MARK: - Formulir Tambah / Edit Penjualan dengan Upload ZIP Responsif
 struct SaleFormSheet: View {
     @Environment(\.dismiss) var dismiss
 
@@ -720,13 +709,10 @@ struct SaleFormSheet: View {
     @State private var selectedGaransi = 365
     @State private var catatan = ""
 
-    // State Berkas Sertifikat (Opsional)
-    @State private var p12FileName: String? = nil
-    @State private var provisionFileName: String? = nil
+    // State Berkas ZIP Sertifikat (Opsional)
+    @State private var zipFileName: String? = nil
     @State private var certPassword = ""
-
-    @State private var showP12Picker = false
-    @State private var showProvisionPicker = false
+    @State private var showZipPicker = false
 
     @State private var showDuplicateAlert = false
     @State private var duplicateDetails = ""
@@ -756,61 +742,49 @@ struct SaleFormSheet: View {
                         .autocapitalization(.none)
                 }
 
-                // MARK: - Bagian Berkas Sertifikat (100% Opsional)
-                Section(header: Text("Simpan Sertifikat (Opsional)"), footer: Text("Boleh dikosongkan jika tidak ingin menyimpan file sertifikat.")) {
-                    // Upload File .p12
-                    HStack {
-                        Image(systemName: "lock.shield.fill")
-                            .foregroundColor(.blue)
-                        if let name = p12FileName {
-                            Text("P12: Terpasang ✅")
+                // MARK: - Upload ZIP Cert (Opsional)
+                Section(header: Text("File ZIP Sertifikat (Opsional)"), footer: Text("Simpan file .zip (isi .p12 + .mobileprovision) agar mudah dikirim ulang sewaktu-waktu.")) {
+                    if let name = zipFileName {
+                        HStack {
+                            Image(systemName: "doc.zipper")
+                                .foregroundColor(.cyan)
+                            Text("ZIP Terpasang ✅")
                                 .font(.subheadline)
                                 .foregroundColor(.green)
                             Spacer()
                             Button("Hapus") {
-                                CertStorageManager.shared.deleteFile(fileName: p12FileName)
-                                p12FileName = nil
+                                CertStorageManager.shared.deleteFile(fileName: zipFileName)
+                                zipFileName = nil
                             }
                             .font(.caption)
                             .foregroundColor(.red)
-                        } else {
-                            Button("Pilih File .p12") {
-                                showP12Picker = true
-                            }
-                            .font(.subheadline)
-                            .foregroundColor(.blue)
+                            .buttonStyle(.borderless)
                         }
+                    } else {
+                        Button {
+                            showZipPicker = true
+                        } label: {
+                            HStack {
+                                Image(systemName: "doc.badge.plus")
+                                    .foregroundColor(.cyan)
+                                Text("Pilih Berkas ZIP Cert")
+                                    .font(.subheadline)
+                                    .foregroundColor(.cyan)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption2)
+                                    .foregroundColor(.gray)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.borderless)
                     }
 
-                    // Upload File .mobileprovision
-                    HStack {
-                        Image(systemName: "doc.badge.gearshape.fill")
-                            .foregroundColor(.purple)
-                        if let name = provisionFileName {
-                            Text("Provision: Terpasang ✅")
-                                .font(.subheadline)
-                                .foregroundColor(.green)
-                            Spacer()
-                            Button("Hapus") {
-                                CertStorageManager.shared.deleteFile(fileName: provisionFileName)
-                                provisionFileName = nil
-                            }
-                            .font(.caption)
-                            .foregroundColor(.red)
-                        } else {
-                            Button("Pilih File .mobileprovision") {
-                                showProvisionPicker = true
-                            }
-                            .font(.subheadline)
-                            .foregroundColor(.purple)
-                        }
-                    }
-
-                    // Password P12
+                    // Password Cert (Opsional)
                     HStack {
                         Image(systemName: "key.fill")
                             .foregroundColor(.yellow)
-                        TextField("Password .p12 (misal: 1 atau cert)", text: $certPassword)
+                        TextField("Password Cert (misal: 1)", text: $certPassword)
                             .autocapitalization(.none)
                     }
                 }
@@ -893,14 +867,10 @@ struct SaleFormSheet: View {
                     }
                 }
             }
-            .fileImporter(isPresented: $showP12Picker, allowedContentTypes: [.data, .item]) { result in
+            // File Importer Khusus File .ZIP & Arsip (Bisa Dipilih Lancar)
+            .fileImporter(isPresented: $showZipPicker, allowedContentTypes: [.zip, .archive, .data]) { result in
                 if let url = try? result.get() {
-                    p12FileName = CertStorageManager.shared.saveFile(from: url, for: itemId, extensionName: "cert")
-                }
-            }
-            .fileImporter(isPresented: $showProvisionPicker, allowedContentTypes: [.data, .item]) { result in
-                if let url = try? result.get() {
-                    provisionFileName = CertStorageManager.shared.saveFile(from: url, for: itemId, extensionName: "provision")
+                    zipFileName = CertStorageManager.shared.saveZip(from: url, for: itemId)
                 }
             }
             .alert("⚠️ UDID Sudah Terdaftar!", isPresented: $showDuplicateAlert) {
@@ -927,8 +897,7 @@ struct SaleFormSheet: View {
                     hargaJualText = String(item.hargaJual)
                     selectedGaransi = item.durasiHari
                     catatan = item.catatan
-                    p12FileName = item.p12FileName
-                    provisionFileName = item.provisionFileName
+                    zipFileName = item.zipFileName
                     certPassword = item.certPassword ?? ""
                 }
             }
@@ -947,8 +916,7 @@ struct SaleFormSheet: View {
             hargaJual: Int(hargaJualText) ?? 0,
             durasiHari: selectedGaransi,
             catatan: catatan,
-            p12FileName: p12FileName,
-            provisionFileName: provisionFileName,
+            zipFileName: zipFileName,
             certPassword: certPassword.trimmingCharacters(in: .whitespacesAndNewlines)
         )
 
