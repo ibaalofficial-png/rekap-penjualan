@@ -135,14 +135,11 @@ struct ContentView: View {
     @State private var itemToEdit: SaleItem? = nil
     @State private var timerNow = Date()
 
-    // Mode Sensor Finansial (Sembunyikan Harga / SS Mode)
     @AppStorage("hideFinancials") private var hideFinancials: Bool = false
 
-    // Pencarian & Filter
     @State private var searchText = ""
     @State private var selectedFilter: FilterGaransi = .semua
 
-    // Backup & Restore
     @State private var backupFileURL: URL? = nil
     @State private var showShareSheet = false
     @State private var showFileImporter = false
@@ -189,10 +186,8 @@ struct ContentView: View {
 
                 ScrollView {
                     VStack(spacing: 16) {
-                        // 1. Dashboard Ringkasan Finansial
                         summaryDashboardView
 
-                        // 2. Bar Filter & Jumlah
                         VStack(spacing: 10) {
                             Picker("Filter", selection: $selectedFilter) {
                                 ForEach(FilterGaransi.allCases) { filter in
@@ -214,7 +209,6 @@ struct ContentView: View {
                             .padding(.horizontal)
                         }
 
-                        // 3. List Pembeli
                         if filteredItems.isEmpty {
                             VStack(spacing: 12) {
                                 Image(systemName: "magnifyingglass")
@@ -258,7 +252,6 @@ struct ContentView: View {
                 }
 
                 ToolbarItemGroup(placement: .navigationBarTrailing) {
-                    // Tombol Mata Mode Sensor Finansial
                     Button {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             hideFinancials.toggle()
@@ -269,7 +262,6 @@ struct ContentView: View {
                             .foregroundColor(hideFinancials ? .orange : .gray)
                     }
 
-                    // Tombol Tambah
                     Button {
                         showAddModal = true
                     } label: {
@@ -279,14 +271,16 @@ struct ContentView: View {
                     }
                 }
             }
+            // Sheet Tambah Data Baru
             .sheet(isPresented: $showAddModal) {
-                SaleFormSheet { newItem in
+                SaleFormSheet(existingItems: items) { newItem in
                     items.insert(newItem, at: 0)
                     saveData()
                 }
             }
+            // Sheet Edit Data
             .sheet(item: $itemToEdit) { currentItem in
-                SaleFormSheet(itemToEdit: currentItem) { updatedItem in
+                SaleFormSheet(itemToEdit: currentItem, existingItems: items) { updatedItem in
                     if let idx = items.firstIndex(where: { $0.id == updatedItem.id }) {
                         items[idx] = updatedItem
                         saveData()
@@ -379,14 +373,12 @@ struct ContentView: View {
     }
 
     private func buyerCard(item: SaleItem) -> some View {
-        // Logika Pembeda Ikon & Warna (WhatsApp vs Telegram)
         let isTele = item.isTelegram
         let badgeColor: Color = isTele ? Color(red: 0.20, green: 0.65, blue: 0.95) : Color(red: 0.15, green: 0.82, blue: 0.45)
         let iconName = isTele ? "paperplane.fill" : "phone.bubble.left.fill"
 
         return VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .center) {
-                // Tombol Buyer: Ikon & Warna sesuai WA/Tele, nomor HP disembunyikan
                 Button {
                     openChatLink(item.kontakBuyer)
                 } label: {
@@ -423,7 +415,6 @@ struct ContentView: View {
                 }
             }
 
-            // Nomor UDID Full
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text("UDID:")
@@ -448,7 +439,6 @@ struct ContentView: View {
             .background(Color.black.opacity(0.25))
             .cornerRadius(8)
 
-            // Catatan Tipe HP dengan Emoticon HP 📱
             if !item.catatan.isEmpty && item.catatan != "-" {
                 Text("📱 \(item.catatan)")
                     .font(.caption2)
@@ -457,7 +447,6 @@ struct ContentView: View {
 
             Divider().background(Color.white.opacity(0.1))
 
-            // Status Garansi & Tanggal
             VStack(spacing: 6) {
                 HStack {
                     StatusGaransiView(now: timerNow, exp: item.expiredDate, durasi: item.durasiHari)
@@ -579,11 +568,12 @@ struct ContentView: View {
     }
 }
 
-// MARK: - Formulir Tambah / Edit Penjualan
+// MARK: - Formulir Tambah / Edit Penjualan dengan Proteksi Anti-Duplikat
 struct SaleFormSheet: View {
     @Environment(\.dismiss) var dismiss
 
     var itemToEdit: SaleItem? = nil
+    var existingItems: [SaleItem] = []
     var onSave: (SaleItem) -> Void
     var onDelete: ((UUID) -> Void)? = nil
 
@@ -595,6 +585,11 @@ struct SaleFormSheet: View {
     @State private var hargaJualText = "150000"
     @State private var selectedGaransi = 365
     @State private var catatan = ""
+
+    // State Peringatan Duplikat
+    @State private var showDuplicateAlert = false
+    @State private var duplicateDetails = ""
+    @State private var pendingItemToSave: SaleItem? = nil
 
     var untungOtomatis: Int {
         let jual = Int(hargaJualText) ?? 0
@@ -690,25 +685,27 @@ struct SaleFormSheet: View {
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
-                        let finalItem = SaleItem(
-                            id: itemToEdit?.id ?? UUID(),
-                            tanggalDaftar: tanggalDaftar,
-                            namaBuyer: namaBuyer.isEmpty ? (kontakBuyer.isEmpty ? "Buyer" : kontakBuyer) : namaBuyer,
-                            kontakBuyer: kontakBuyer,
-                            udid: udid.trimmingCharacters(in: .whitespacesAndNewlines),
-                            modal: Int(modalText) ?? 0,
-                            hargaJual: Int(hargaJualText) ?? 0,
-                            durasiHari: selectedGaransi,
-                            catatan: catatan
-                        )
-                        onSave(finalItem)
-                        dismiss()
+                        validateAndSave()
                     } label: {
                         Text("Simpan")
                             .bold()
                             .foregroundColor(.cyan)
                     }
                 }
+            }
+            // Alert Pencegahan Duplikat
+            .alert("⚠️ UDID Sudah Terdaftar!", isPresented: $showDuplicateAlert) {
+                Button("Batal (Cek Ulang)", role: .cancel) {
+                    pendingItemToSave = nil
+                }
+                Button("Tetap Simpan", role: .destructive) {
+                    if let item = pendingItemToSave {
+                        onSave(item)
+                        dismiss()
+                    }
+                }
+            } message: {
+                Text(duplicateDetails)
             }
             .onAppear {
                 if let item = itemToEdit {
@@ -723,5 +720,40 @@ struct SaleFormSheet: View {
                 }
             }
         }
+    }
+
+    private func validateAndSave() {
+        let cleanUDID = udid.trimmingCharacters(in: .whitespacesAndNewlines)
+        let finalItem = SaleItem(
+            id: itemToEdit?.id ?? UUID(),
+            tanggalDaftar: tanggalDaftar,
+            namaBuyer: namaBuyer.isEmpty ? (kontakBuyer.isEmpty ? "Buyer" : kontakBuyer) : namaBuyer,
+            kontakBuyer: kontakBuyer,
+            udid: cleanUDID.isEmpty ? "-" : cleanUDID,
+            modal: Int(modalText) ?? 0,
+            hargaJual: Int(hargaJualText) ?? 0,
+            durasiHari: selectedGaransi,
+            catatan: catatan
+        )
+
+        // Cek apakah UDID sudah ada sebelumnya (kecuali jika sedang mengedit item itu sendiri)
+        if !cleanUDID.isEmpty && cleanUDID != "-" {
+            let lowerUDID = cleanUDID.lowercased()
+            if let duplikat = existingItems.first(where: {
+                $0.id != finalItem.id &&
+                $0.udid.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == lowerUDID
+            }) {
+                let df = DateFormatter()
+                df.dateFormat = "dd/MM/yyyy"
+                duplicateDetails = "UDID ini sudah pernah didaftarkan atas nama \"\(duplikat.namaBuyer)\" pada tanggal \(df.string(from: duplikat.tanggalDaftar)).\n\nApakah kamu yakin ingin tetap menyimpannya atau membatalkan?"
+                pendingItemToSave = finalItem
+                showDuplicateAlert = true
+                return
+            }
+        }
+
+        // Jika tidak ada duplikat, langsung simpan
+        onSave(finalItem)
+        dismiss()
     }
 }
