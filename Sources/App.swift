@@ -283,6 +283,9 @@ struct ContentView: View {
 
     @AppStorage("hideFinancials") private var hideFinancials: Bool = false
 
+    // State untuk Mengontrol Kloter Mana yang Terbuka (Expanded)
+    @State private var expandedBatches: Set<Int> = []
+
     @State private var searchText = ""
     @State private var selectedFilter: FilterGaransi = .semua
 
@@ -347,6 +350,24 @@ struct ContentView: View {
 
             return matchSearch && matchFilter
         }
+    }
+
+    // Daftar Kloter Unik yang Ada di Hasil Filter (Kloter Terbaru di Atas)
+    var batchesInFiltered: [Int] {
+        let unique = Set(filteredItems.map { $0.batchNumber })
+        return unique.sorted(by: >)
+    }
+
+    func itemsInBatch(_ batch: Int) -> [SaleItem] {
+        filteredItems.filter { $0.batchNumber == batch }
+    }
+
+    func isBatchExpanded(_ batch: Int) -> Bool {
+        // Jika sedang mencari, otomatis buka semua kloter yang cocok
+        if !searchText.trimmingCharacters(in: .whitespaces).isEmpty {
+            return true
+        }
+        return expandedBatches.contains(batch)
     }
 
     var body: some View {
@@ -414,7 +435,7 @@ struct ContentView: View {
                             .padding(.horizontal)
 
                             HStack {
-                                Text("DAFTAR SEMUA PEMBELI")
+                                Text("DAFTAR PEMBELI PER KLOTER")
                                     .font(.system(size: 13, weight: .bold))
                                     .foregroundColor(.white.opacity(0.6))
                                 Spacer()
@@ -437,8 +458,21 @@ struct ContentView: View {
                             }
                             .padding(.top, 40)
                         } else {
-                            ForEach(filteredItems) { item in
-                                buyerCard(item: item)
+                            // Tampilan Akordeon Collapsible per Kloter
+                            ForEach(batchesInFiltered, id: \.self) { batch in
+                                let batchSales = itemsInBatch(batch)
+                                VStack(spacing: 10) {
+                                    kloterAccordionHeader(batch: batch, count: batchSales.count)
+
+                                    if isBatchExpanded(batch) {
+                                        VStack(spacing: 12) {
+                                            ForEach(batchSales) { item in
+                                                buyerCard(item: item)
+                                            }
+                                        }
+                                        .transition(.opacity.combined(with: .move(edge: .top)))
+                                    }
+                                }
                             }
                         }
                     }
@@ -506,6 +540,7 @@ struct ContentView: View {
                     onSave: { newItem in
                         items.insert(newItem, at: 0)
                         recalculateAndSave()
+                        expandedBatches.insert(activeBatchNumber)
                     }
                 )
             }
@@ -555,11 +590,77 @@ struct ContentView: View {
             } message: {
                 Text(alertMessage)
             }
-            .onAppear(perform: loadData)
+            .onAppear {
+                loadData()
+                // Otomatis buka kloter aktif saat pertama kali dibuka
+                if expandedBatches.isEmpty {
+                    expandedBatches.insert(activeBatchNumber)
+                }
+            }
             .onReceive(timer) { input in
                 timerNow = input
             }
         }
+    }
+
+    // MARK: - Header Akordeon Kloter (Collapsible Bar)
+    private func kloterAccordionHeader(batch: Int, count: Int) -> some View {
+        let isExpanded = isBatchExpanded(batch)
+        let isCurrent = (batch == activeBatchNumber)
+
+        return Button {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                if expandedBatches.contains(batch) {
+                    expandedBatches.remove(batch)
+                } else {
+                    expandedBatches.insert(batch)
+                }
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: isExpanded ? "chevron.down.circle.fill" : "chevron.right.circle.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(isCurrent ? .cyan : .white.opacity(0.6))
+
+                Text("KLOTER #\(batch)")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(.white)
+
+                if isCurrent {
+                    Text("AKTIF")
+                        .font(.system(size: 9, weight: .heavy))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.cyan.opacity(0.2))
+                        .foregroundColor(.cyan)
+                        .cornerRadius(4)
+                } else {
+                    Text("SELESAI")
+                        .font(.system(size: 9, weight: .heavy))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.green.opacity(0.2))
+                        .foregroundColor(.green)
+                        .cornerRadius(4)
+                }
+
+                Spacer()
+
+                Text("\(count)/5 Cert")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(count >= 5 ? .green : .gray)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(Color.white.opacity(0.06))
+            .cornerRadius(12)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(isCurrent ? Color.cyan.opacity(0.3) : Color.white.opacity(0.08), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal)
     }
 
     private var summaryDashboardView: some View {
