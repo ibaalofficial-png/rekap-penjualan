@@ -1159,14 +1159,16 @@ struct EditBatchModalSheet: View {
                     Button("Batal") { dismiss() }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Simpan") {
+                    Button {
                         if let val = Int(modalText) {
                             onSave(val)
                         }
                         dismiss()
+                    } label: {
+                        Text("Simpan")
+                            .bold()
+                            .foregroundColor(.cyan)
                     }
-                    .bold()
-                    .foregroundColor(.cyan)
                 }
             }
             .onAppear {
@@ -1330,11 +1332,13 @@ struct SaleFormSheet: View {
                     Button("Batal") { dismiss() }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Simpan") {
+                    Button {
                         validateAndSave()
+                    } label: {
+                        Text("Simpan")
+                            .bold()
+                            .foregroundColor(.cyan)
                     }
-                    .bold()
-                    .foregroundColor(.cyan)
                 }
             }
             .fileImporter(isPresented: $showZipPicker, allowedContentTypes: [.zip, .archive, .data]) { result in
