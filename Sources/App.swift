@@ -55,7 +55,7 @@ struct SaleItem: Identifiable, Codable {
     var udid: String
     var modal: Int
     var hargaJual: Int
-    var durasiHari: Int
+    var durasiHari: Int // Durasi Garansi Toko (misal 30 hari untuk basic)
     var catatan: String
 
     var zipFileName: String? = nil
@@ -65,8 +65,14 @@ struct SaleItem: Identifiable, Codable {
         hargaJual - modal
     }
 
-    var expiredDate: Date {
+    // Tanggal Habis Garansi Toko
+    var expiredGaransiDate: Date {
         Calendar.current.date(byAdding: .day, value: durasiHari, to: tanggalDaftar) ?? tanggalDaftar
+    }
+
+    // Tanggal Habis Sertifikat Apple Asli (Selalu 1 Tahun / 365 Hari)
+    var expiredCertAppleDate: Date {
+        Calendar.current.date(byAdding: .day, value: 365, to: tanggalDaftar) ?? tanggalDaftar
     }
 
     var isTelegram: Bool {
@@ -219,7 +225,7 @@ struct StatusGaransiView: View {
         let h = diff.hour ?? 0
         let m = diff.minute ?? 0
         let s = diff.second ?? 0
-        return ("🟢 \(d)h \(h)j \(m)m \(s)d lagi", .green)
+        return ("🟢 Garansi: \(d)h \(h)j \(m)m lagi", .green)
     }
 
     var body: some View {
@@ -279,9 +285,9 @@ struct ContentView: View {
             case .semua:
                 matchFilter = true
             case .aktif:
-                matchFilter = item.durasiHari > 0 && timerNow < item.expiredDate
+                matchFilter = item.durasiHari > 0 && timerNow < item.expiredGaransiDate
             case .habis:
-                matchFilter = item.durasiHari == 0 || timerNow >= item.expiredDate
+                matchFilter = item.durasiHari == 0 || timerNow >= item.expiredGaransiDate
             }
 
             return matchSearch && matchFilter
@@ -618,20 +624,24 @@ struct ContentView: View {
 
             Divider().background(Color.white.opacity(0.1))
 
+            // Info Dual Expired: Garansi Toko & Cert Apple 1 Tahun
             VStack(spacing: 6) {
                 HStack {
-                    StatusGaransiView(now: timerNow, exp: item.expiredDate, durasi: item.durasiHari)
+                    StatusGaransiView(now: timerNow, exp: item.expiredGaransiDate, durasi: item.durasiHari)
                     Spacer()
-                    Text("Exp: \(formatDate(item.expiredDate))")
+                    Text("Garansi s/d: \(item.durasiHari == 0 ? "Non-Garansi" : formatDate(item.expiredGaransiDate))")
                         .font(.caption2)
                         .bold()
-                        .foregroundColor(.orange.opacity(0.9))
+                        .foregroundColor(item.durasiHari == 0 ? .gray : .orange.opacity(0.95))
                 }
                 HStack {
-                    Spacer()
                     Text("Daftar: \(formatDate(item.tanggalDaftar))")
-                        .font(.system(size: 10))
+                        .font(.system(size: 11))
                         .foregroundColor(.gray)
+                    Spacer()
+                    Text("Cert Apple: \(formatDate(item.expiredCertAppleDate))")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.cyan.opacity(0.85))
                 }
             }
         }
@@ -789,7 +799,7 @@ struct SaleFormSheet: View {
     @State private var udid = ""
     @State private var modalText = "75000"
     @State private var hargaJualText = "150000"
-    @State private var selectedGaransi = 365
+    @State private var selectedGaransi = 30 // Default: 1 Bulan (Paket Basic)
     @State private var catatan = ""
 
     @State private var zipFileName: String? = nil
@@ -807,10 +817,10 @@ struct SaleFormSheet: View {
     }
 
     let opsiGaransi: [GaransiOption] = [
-        GaransiOption(id: 365, name: "1 Tahun (365 Hari)"),
-        GaransiOption(id: 180, name: "6 Bulan (180 Hari)"),
-        GaransiOption(id: 90, name: "3 Bulan (90 Hari)"),
-        GaransiOption(id: 30, name: "1 Bulan (30 Hari)"),
+        GaransiOption(id: 30, name: "1 Bulan (Paket Basic)"),
+        GaransiOption(id: 90, name: "3 Bulan (Paket Regular)"),
+        GaransiOption(id: 180, name: "6 Bulan (Paket VIP)"),
+        GaransiOption(id: 365, name: "1 Tahun Full"),
         GaransiOption(id: 0, name: "Tanpa Garansi")
     ]
 
@@ -869,7 +879,7 @@ struct SaleFormSheet: View {
                     }
                 }
 
-                Section(header: Text("Waktu Transaksi & Garansi")) {
+                Section(header: Text("Waktu Transaksi & Garansi Toko")) {
                     DatePicker("Tanggal Masuk", selection: $tanggalDaftar, displayedComponents: [.date, .hourAndMinute])
                     Picker("Paket Garansi", selection: $selectedGaransi) {
                         ForEach(opsiGaransi) { item in
