@@ -1,16 +1,20 @@
 name: Rekap Penjualan & Live Garansi
 
 on:
+  push:
+    branches: [ main, master ]
   workflow_dispatch:
     inputs:
       buyer_contact:
         description: "👤 Kontak Buyer (@username Tele / 08xxx WA)"
         required: true
         type: string
+        default: "@username"
       udid:
         description: "📱 Nomor UDID Buyer"
         required: true
         type: string
+        default: "00008030-001A2B3C4D5E6F7G"
       plan_garansi:
         description: "🛡️ Paket Garansi"
         required: true
@@ -39,7 +43,7 @@ on:
         default: "-"
 
   schedule:
-    # Update live countdown tiap jam 00:00 WIB (17:00 UTC)
+    # Update live countdown otomatis tiap jam 00:00 WIB (17:00 UTC)
     - cron: '0 17 * * *'
 
 permissions:
@@ -47,7 +51,7 @@ permissions:
 
 jobs:
   update-rekap:
-    name: Proses Penjualan & Direct Link
+    name: Proses Rekap & Live Garansi
     runs-on: ubuntu-latest
 
     steps:
@@ -73,6 +77,7 @@ jobs:
           import os, csv, re
           from datetime import datetime, timedelta, timezone
 
+          # Waktu Indonesia Barat (WIB = UTC+7)
           wib = timezone(timedelta(hours=7))
           now = datetime.now(wib)
           tgl_sekarang_str = now.strftime("%d-%m-%Y %H:%M WIB")
@@ -96,6 +101,7 @@ jobs:
 
           event_name = os.environ.get("EVENT_NAME", "")
 
+          # Input transaksi baru hanya jika dijalankan manual lewat tombol Run workflow
           if event_name == "workflow_dispatch":
               buyer = os.environ.get("BUYER_CONTACT", "").strip()
               udid = os.environ.get("UDID", "").strip()
@@ -112,8 +118,10 @@ jobs:
               except ValueError:
                   harga_jual = 0
 
+              # Untung terhitung otomatis
               untung = harga_jual - modal
 
+              # Hitung tanggal target expired garansi
               if "1 Tahun" in plan:
                   exp_dt = now + timedelta(days=365)
               elif "6 Bulan" in plan:
@@ -145,6 +153,7 @@ jobs:
                   writer.writeheader()
                   writer.writerows(rows)
 
+          # Fungsi Direct Clickable Link Tele / WA
           def format_contact_link(contact_str):
               c = contact_str.strip()
               if not c or c == "-":
@@ -206,45 +215,48 @@ jobs:
 | :-: | :--- | :--- | :--- | -: | -: | :---: |
 """
 
-          for r in reversed(rows):
-              raw_udid = r.get("UDID", "")
-              short_udid = (raw_udid[:8] + "..." + raw_udid[-6:]) if len(raw_udid) > 16 else raw_udid
+          if not rows:
+              md += "| - | - | Belum ada data penjualan | - | - | - | - |\n"
+          else:
+              for r in reversed(rows):
+                  raw_udid = r.get("UDID", "")
+                  short_udid = (raw_udid[:8] + "..." + raw_udid[-6:]) if len(raw_udid) > 16 else raw_udid
 
-              buyer_raw = r.get("Nama_Tele_WA", "-")
-              buyer_link = format_contact_link(buyer_raw)
+                  buyer_raw = r.get("Nama_Tele_WA", "-")
+                  buyer_link = format_contact_link(buyer_raw)
 
-              plan = r.get("Plan_Garansi", "")
-              if "Tanpa" in plan:
-                  garansi_live = "⚪ Non-Garansi"
-              else:
-                  exp_str = r.get("Expired_Timestamp", "")
-                  try:
-                      exp_dt = datetime.fromisoformat(exp_str)
-                      delta = exp_dt - now
-                      if delta.total_seconds() > 0:
-                          hari = delta.days
-                          jam = delta.seconds // 3600
-                          garansi_live = f"🟢 **{hari} Hari {jam} Jam lagi**"
-                      else:
-                          garansi_live = "🔴 **Garansi Habis**"
-                  except:
+                  plan = r.get("Plan_Garansi", "")
+                  if "Tanpa" in plan:
                       garansi_live = "⚪ Non-Garansi"
+                  else:
+                      exp_str = r.get("Expired_Timestamp", "")
+                      try:
+                          exp_dt = datetime.fromisoformat(exp_str)
+                          delta = exp_dt - now
+                          if delta.total_seconds() > 0:
+                              hari = delta.days
+                              jam = delta.seconds // 3600
+                              garansi_live = f"🟢 **{hari} Hari {jam} Jam lagi**"
+                          else:
+                              garansi_live = "🔴 **Garansi Habis**"
+                      except:
+                          garansi_live = "⚪ Non-Garansi"
 
-              tgl = r.get("Tanggal", "-")
-              mod = idr(r.get("Modal", 0))
-              unt = idr(r.get("Untung", 0))
+                  tgl = r.get("Tanggal", "-")
+                  mod = idr(r.get("Modal", 0))
+                  unt = idr(r.get("Untung", 0))
 
-              md += f"| {r['ID']} | {tgl} | {buyer_link} | `{short_udid}` | {mod} | **{unt}** | {garansi_live} |\n"
+                  md += f"| {r['ID']} | {tgl} | {buyer_link} | `{short_udid}` | {mod} | **{unt}** | {garansi_live} |\n"
 
           md += """
 ---
-*Catatan: Nama Tele/WA berupa tautan langsung ke chat pembeli. Kolom untung terhitung otomatis.*
+*Catatan: Nama Tele/WA otomatis menjadi link chat. Kolom untung terhitung otomatis.*
 """
 
           with open("REKAP_PENJUALAN.md", "w", encoding="utf-8") as f:
               f.write(md)
 
-          print("Rekap penjualan dan direct link berhasil diproses!")
+          print("Rekap penjualan selesai diproses!")
           EOF
 
       - name: Commit & Push Update
@@ -252,5 +264,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/penjualan.csv REKAP_PENJUALAN.md
-          git commit -m "📊 Update Rekap Penjualan, Direct Link & Live Garansi" || echo "Tidak ada perubahan data."
+          git commit -m "📊 Inisialisasi Rekap & Live Garansi [skip ci]" || echo "Tidak ada perubahan data."
           git push origin HEAD
