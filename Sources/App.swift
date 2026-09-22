@@ -28,6 +28,34 @@ struct SaleItem: Identifiable, Codable {
         return clean.hasPrefix("@") || clean.contains("t.me/")
     }
 
+    // Nama pintar: jika nama kosong dan kontak berupa nomor HP, otomatis disensor tengahnya
+    var displayName: String {
+        let trimNama = namaBuyer.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimNama.isEmpty && trimNama != "-" {
+            return trimNama
+        }
+
+        let trimKontak = kontakBuyer.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimKontak.isEmpty {
+            return "Customer"
+        }
+
+        // Kalau Telegram, tampilkan usernamenya
+        if isTelegram {
+            return trimKontak
+        }
+
+        // Kalau nomor HP/WA, sensor angka tengah demi privasi (misal 0853••••1234)
+        let digits = trimKontak.filter { $0.isNumber }
+        if digits.count >= 8 {
+            let start = digits.prefix(4)
+            let end = digits.suffix(4)
+            return "\(start)••••\(end)"
+        }
+
+        return "Customer WA"
+    }
+
     enum CodingKeys: String, CodingKey {
         case id, tanggalDaftar, namaBuyer, kontakBuyer, udid, modal, hargaJual, durasiHari, catatan
     }
@@ -50,7 +78,7 @@ struct SaleItem: Identifiable, Codable {
         tanggalDaftar = try container.decodeIfPresent(Date.self, forKey: .tanggalDaftar) ?? Date()
         let kontak = try container.decodeIfPresent(String.self, forKey: .kontakBuyer) ?? ""
         kontakBuyer = kontak
-        namaBuyer = try container.decodeIfPresent(String.self, forKey: .namaBuyer) ?? (kontak.isEmpty ? "Buyer" : kontak)
+        namaBuyer = try container.decodeIfPresent(String.self, forKey: .namaBuyer) ?? ""
         udid = try container.decodeIfPresent(String.self, forKey: .udid) ?? "-"
         modal = try container.decodeIfPresent(Int.self, forKey: .modal) ?? 0
         hargaJual = try container.decodeIfPresent(Int.self, forKey: .hargaJual) ?? 0
@@ -159,7 +187,7 @@ struct ContentView: View {
                 matchSearch = true
             } else {
                 let q = searchText.lowercased()
-                matchSearch = item.namaBuyer.lowercased().contains(q) ||
+                matchSearch = item.displayName.lowercased().contains(q) ||
                               item.kontakBuyer.lowercased().contains(q) ||
                               item.udid.lowercased().contains(q) ||
                               item.catatan.lowercased().contains(q)
@@ -271,14 +299,12 @@ struct ContentView: View {
                     }
                 }
             }
-            // Sheet Tambah Data Baru
             .sheet(isPresented: $showAddModal) {
                 SaleFormSheet(existingItems: items) { newItem in
                     items.insert(newItem, at: 0)
                     saveData()
                 }
             }
-            // Sheet Edit Data
             .sheet(item: $itemToEdit) { currentItem in
                 SaleFormSheet(itemToEdit: currentItem, existingItems: items) { updatedItem in
                     if let idx = items.firstIndex(where: { $0.id == updatedItem.id }) {
@@ -337,7 +363,7 @@ struct ContentView: View {
                         .background(Color.green.opacity(0.2))
                         .cornerRadius(6)
                         .foregroundColor(.green)
-                }
+            }
             }
 
             Text(hideFinancials ? "Rp ••••••••" : formatIDR(totalUntung))
@@ -379,13 +405,14 @@ struct ContentView: View {
 
         return VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .center) {
+                // Tombol Buyer: Menampilkan displayName cerdas (nama asli, @user tele, atau 0853••••1234)
                 Button {
                     openChatLink(item.kontakBuyer)
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: iconName)
                             .font(.system(size: 13, weight: .bold))
-                        Text(item.namaBuyer.isEmpty ? "Tanpa Nama" : item.namaBuyer)
+                        Text(item.displayName)
                             .bold()
                     }
                     .foregroundColor(badgeColor)
@@ -415,6 +442,7 @@ struct ContentView: View {
                 }
             }
 
+            // Nomor UDID Full
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text("UDID:")
@@ -439,6 +467,7 @@ struct ContentView: View {
             .background(Color.black.opacity(0.25))
             .cornerRadius(8)
 
+            // Catatan Perangkat
             if !item.catatan.isEmpty && item.catatan != "-" {
                 Text("📱 \(item.catatan)")
                     .font(.caption2)
@@ -568,7 +597,7 @@ struct ContentView: View {
     }
 }
 
-// MARK: - Formulir Tambah / Edit Penjualan dengan Proteksi Anti-Duplikat
+// MARK: - Formulir Tambah / Edit Penjualan
 struct SaleFormSheet: View {
     @Environment(\.dismiss) var dismiss
 
@@ -586,7 +615,6 @@ struct SaleFormSheet: View {
     @State private var selectedGaransi = 365
     @State private var catatan = ""
 
-    // State Peringatan Duplikat
     @State private var showDuplicateAlert = false
     @State private var duplicateDetails = ""
     @State private var pendingItemToSave: SaleItem? = nil
@@ -609,7 +637,7 @@ struct SaleFormSheet: View {
         NavigationView {
             Form {
                 Section(header: Text("Informasi Pembeli")) {
-                    TextField("Nama Buyer (misal: Budi)", text: $namaBuyer)
+                    TextField("Nama Buyer (Boleh kosong)", text: $namaBuyer)
                     TextField("Nomor WA (08xxx) atau Telegram (@username)", text: $kontakBuyer)
                         .keyboardType(.emailAddress)
                         .autocapitalization(.none)
@@ -693,7 +721,6 @@ struct SaleFormSheet: View {
                     }
                 }
             }
-            // Alert Pencegahan Duplikat
             .alert("⚠️ UDID Sudah Terdaftar!", isPresented: $showDuplicateAlert) {
                 Button("Batal (Cek Ulang)", role: .cancel) {
                     pendingItemToSave = nil
@@ -727,8 +754,8 @@ struct SaleFormSheet: View {
         let finalItem = SaleItem(
             id: itemToEdit?.id ?? UUID(),
             tanggalDaftar: tanggalDaftar,
-            namaBuyer: namaBuyer.isEmpty ? (kontakBuyer.isEmpty ? "Buyer" : kontakBuyer) : namaBuyer,
-            kontakBuyer: kontakBuyer,
+            namaBuyer: namaBuyer.trimmingCharacters(in: .whitespacesAndNewlines),
+            kontakBuyer: kontakBuyer.trimmingCharacters(in: .whitespacesAndNewlines),
             udid: cleanUDID.isEmpty ? "-" : cleanUDID,
             modal: Int(modalText) ?? 0,
             hargaJual: Int(hargaJualText) ?? 0,
@@ -736,7 +763,6 @@ struct SaleFormSheet: View {
             catatan: catatan
         )
 
-        // Cek apakah UDID sudah ada sebelumnya (kecuali jika sedang mengedit item itu sendiri)
         if !cleanUDID.isEmpty && cleanUDID != "-" {
             let lowerUDID = cleanUDID.lowercased()
             if let duplikat = existingItems.first(where: {
@@ -745,14 +771,13 @@ struct SaleFormSheet: View {
             }) {
                 let df = DateFormatter()
                 df.dateFormat = "dd/MM/yyyy"
-                duplicateDetails = "UDID ini sudah pernah didaftarkan atas nama \"\(duplikat.namaBuyer)\" pada tanggal \(df.string(from: duplikat.tanggalDaftar)).\n\nApakah kamu yakin ingin tetap menyimpannya atau membatalkan?"
+                duplicateDetails = "UDID ini sudah pernah didaftarkan atas nama \"\(duplikat.displayName)\" pada tanggal \(df.string(from: duplikat.tanggalDaftar)).\n\nApakah kamu yakin ingin tetap menyimpannya atau membatalkan?"
                 pendingItemToSave = finalItem
                 showDuplicateAlert = true
                 return
             }
         }
 
-        // Jika tidak ada duplikat, langsung simpan
         onSave(finalItem)
         dismiss()
     }
