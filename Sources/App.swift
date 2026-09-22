@@ -20,11 +20,11 @@ struct AppFormatters {
     }
 }
 
-// MARK: - Manajer Penyimpanan Modal per Kloter
+// MARK: - Manajer Penyimpanan Modal per Kloter (Default: 0)
 class BatchModalManager {
     static let shared = BatchModalManager()
     private let key = "saved_batch_modals"
-    private let defaultModal = 200000
+    private let defaultModal = 0 // Default NOL agar aman dan privasi modal terjaga
 
     func getModal(for batch: Int) -> Int {
         let dict = UserDefaults.standard.dictionary(forKey: key) as? [String: Int] ?? [:]
@@ -188,7 +188,7 @@ struct GaransiOption: Identifiable {
     let name: String
 }
 
-// MARK: - Extension Liquid Glass Modern (Kompatibel Penuh iOS 15.0+)
+// MARK: - Extension Liquid Glass Modern (Kompatibel iOS 15.0+)
 extension View {
     @ViewBuilder
     func applyTextSelection(_ enabled: Bool) -> some View {
@@ -329,7 +329,7 @@ struct LiquidPrismSwitch: View {
                     lineWidth: 1.1
                 )
         )
-        .shadow(color: Color.black.opacity(0.5), radius: 18, x: 0, y: 8)
+        .shadow(color: Color.black.opacity(0.5), radius: 18, y: 8)
         .padding(.horizontal)
     }
 
@@ -801,6 +801,7 @@ struct ContentView: View {
                     .foregroundColor(hideFinancials ? .gray : (untungKloterAktif >= 0 ? .green : .red))
                     .shadow(color: hideFinancials ? .clear : (untungKloterAktif >= 0 ? Color.green.opacity(0.3) : Color.red.opacity(0.3)), radius: 10)
 
+                // Keterangan Aman & Privasi Terjaga
                 if hideFinancials {
                     Text("Mode Sensor Finansial Aktif 🔒")
                         .font(.system(size: 11, weight: .medium))
@@ -1361,12 +1362,12 @@ struct EditBatchModalSheet: View {
     var body: some View {
         NavigationView {
             Form {
-                Section(header: Text("Modal Kloter #\(batchNumber) (Paket 5 Cert)"), footer: Text("Ubah nominal modal jika kurs dolar supplier pada kloter ini berbeda.")) {
+                Section(header: Text("Modal Kloter #\(batchNumber) (Paket 5 Cert)"), footer: Text("Atur modal kloter ini sesuai biaya yang kamu keluarkan.")) {
                     HStack {
                         Text("Modal Top-Up (Rp)")
                             .font(.system(size: 15, weight: .bold))
                         Spacer()
-                        TextField("200000", text: $modalText)
+                        TextField("0", text: $modalText)
                             .keyboardType(.numberPad)
                             .multilineTextAlignment(.trailing)
                             .foregroundColor(.cyan)
