@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import Combine
+import UniformTypeIdentifiers
 
 // MARK: - Model Data Penjualan
 struct SaleItem: Identifiable, Codable {
@@ -38,7 +39,6 @@ struct SaleItem: Identifiable, Codable {
         self.catatan = catatan
     }
 
-    // Kompatibilitas mundur agar data tersimpan sebelumnya tidak korup
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
@@ -52,6 +52,13 @@ struct SaleItem: Identifiable, Codable {
         durasiHari = try container.decodeIfPresent(Int.self, forKey: .durasiHari) ?? 365
         catatan = try container.decodeIfPresent(String.self, forKey: .catatan) ?? ""
     }
+}
+
+enum FilterGaransi: String, CaseIterable, Identifiable {
+    case semua = "Semua"
+    case aktif = "Aktif"
+    case habis = "Habis"
+    var id: String { self.rawValue }
 }
 
 struct GaransiOption: Identifiable {
@@ -68,6 +75,17 @@ struct iBaalSalesApp: App {
                 .preferredColorScheme(.dark)
         }
     }
+}
+
+// MARK: - Share Sheet Backup
+struct ShareSheet: UIViewControllerRepresentable {
+    var activityItems: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 // MARK: - Komponen Status Garansi
@@ -112,11 +130,52 @@ struct ContentView: View {
     @State private var itemToEdit: SaleItem? = nil
     @State private var timerNow = Date()
 
+    // Mode Sensor Finansial (Sembunyikan Harga / SS Mode)
+    @AppStorage("hideFinancials") private var hideFinancials: Bool = false
+
+    // Pencarian & Filter
+    @State private var searchText = ""
+    @State private var selectedFilter: FilterGaransi = .semua
+
+    // Backup & Restore
+    @State private var backupFileURL: URL? = nil
+    @State private var showShareSheet = false
+    @State private var showFileImporter = false
+    @State private var alertMessage = ""
+    @State private var showAlert = false
+
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var totalModal: Int { items.reduce(0) { $0 + $1.modal } }
     var totalOmset: Int { items.reduce(0) { $0 + $1.hargaJual } }
     var totalUntung: Int { items.reduce(0) { $0 + $1.untung } }
+
+    var filteredItems: [SaleItem] {
+        items.filter { item in
+            let matchSearch: Bool
+            if searchText.trimmingCharacters(in: .whitespaces).isEmpty {
+                matchSearch = true
+            } else {
+                let q = searchText.lowercased()
+                matchSearch = item.namaBuyer.lowercased().contains(q) ||
+                              item.kontakBuyer.lowercased().contains(q) ||
+                              item.udid.lowercased().contains(q) ||
+                              item.catatan.lowercased().contains(q)
+            }
+
+            let matchFilter: Bool
+            switch selectedFilter {
+            case .semua:
+                matchFilter = true
+            case .aktif:
+                matchFilter = item.durasiHari > 0 && timerNow < item.expiredDate
+            case .habis:
+                matchFilter = item.durasiHari == 0 || timerNow >= item.expiredDate
+            }
+
+            return matchSearch && matchFilter
+        }
+    }
 
     var body: some View {
         NavigationView {
@@ -125,32 +184,45 @@ struct ContentView: View {
 
                 ScrollView {
                     VStack(spacing: 16) {
+                        // 1. Dashboard Ringkasan Finansial
                         summaryDashboardView
 
-                        HStack {
-                            Text("DAFTAR PEMBELI & GARANSI")
-                                .font(.system(size: 13, weight: .bold))
-                                .foregroundColor(.gray)
-                            Spacer()
-                            Text("\(items.count) Unit")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(.cyan)
-                        }
-                        .padding(.horizontal)
+                        // 2. Bar Filter & Jumlah
+                        VStack(spacing: 10) {
+                            Picker("Filter", selection: $selectedFilter) {
+                                ForEach(FilterGaransi.allCases) { filter in
+                                    Text(filter.rawValue).tag(filter)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                            .padding(.horizontal)
 
-                        if items.isEmpty {
+                            HStack {
+                                Text("DAFTAR PEMBELI")
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundColor(.gray)
+                                Spacer()
+                                Text("\(filteredItems.count) Terfilter / \(items.count) Total")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(.cyan)
+                            }
+                            .padding(.horizontal)
+                        }
+
+                        // 3. List Pembeli
+                        if filteredItems.isEmpty {
                             VStack(spacing: 12) {
-                                Image(systemName: "tray.fill")
-                                    .font(.system(size: 44))
+                                Image(systemName: "magnifyingglass")
+                                    .font(.system(size: 40))
                                     .foregroundColor(.gray.opacity(0.5))
-                                Text("Belum ada data transaksi.\nTekan tombol + di atas untuk mencatat.")
+                                Text(items.isEmpty ? "Belum ada transaksi.\nTekan + untuk menambah." : "Tidak ditemukan transaksi yang cocok.")
                                     .font(.subheadline)
                                     .foregroundColor(.gray)
                                     .multilineTextAlignment(.center)
                             }
-                            .padding(.top, 60)
+                            .padding(.top, 40)
                         } else {
-                            ForEach(items) { item in
+                            ForEach(filteredItems) { item in
                                 buyerCard(item: item)
                             }
                         }
@@ -159,8 +231,40 @@ struct ContentView: View {
                 }
             }
             .navigationTitle("Cert Manager ⚡")
+            .searchable(text: $searchText, prompt: "Cari nama, UDID, tipe HP...")
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Menu {
+                        Button {
+                            exportBackup()
+                        } label: {
+                            Label("Cadangkan Data (Backup)", systemImage: "square.and.arrow.up")
+                        }
+                        Button {
+                            showFileImporter = true
+                        } label: {
+                            Label("Pulihkan Data (Restore)", systemImage: "square.and.arrow.down")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(.gray)
+                    }
+                }
+
+                ToolbarItemGroup(placement: .navigationBarTrailing) {
+                    // Tombol Mata Mode Sensor Finansial
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            hideFinancials.toggle()
+                        }
+                    } label: {
+                        Image(systemName: hideFinancials ? "eye.slash.fill" : "eye.fill")
+                            .font(.system(size: 18))
+                            .foregroundColor(hideFinancials ? .orange : .gray)
+                    }
+
+                    // Tombol Tambah
                     Button {
                         showAddModal = true
                     } label: {
@@ -170,14 +274,12 @@ struct ContentView: View {
                     }
                 }
             }
-            // Sheet Tambah Data Baru
             .sheet(isPresented: $showAddModal) {
                 SaleFormSheet { newItem in
                     items.insert(newItem, at: 0)
                     saveData()
                 }
             }
-            // Sheet Edit / Hapus Data
             .sheet(item: $itemToEdit) { currentItem in
                 SaleFormSheet(itemToEdit: currentItem) { updatedItem in
                     if let idx = items.firstIndex(where: { $0.id == updatedItem.id }) {
@@ -188,6 +290,19 @@ struct ContentView: View {
                     items.removeAll { $0.id == deletedId }
                     saveData()
                 }
+            }
+            .sheet(isPresented: $showShareSheet) {
+                if let url = backupFileURL {
+                    ShareSheet(activityItems: [url])
+                }
+            }
+            .fileImporter(isPresented: $showFileImporter, allowedContentTypes: [.json, .plainText]) { result in
+                handleImportBackup(result: result)
+            }
+            .alert("Informasi", isPresented: $showAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(alertMessage)
             }
             .onAppear(perform: loadData)
             .onReceive(timer) { input in
@@ -203,19 +318,34 @@ struct ContentView: View {
                     .font(.caption)
                     .bold()
                     .foregroundColor(.green.opacity(0.8))
+
                 Spacer()
-                Text("Live Monitor")
-                    .font(.caption2)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Color.green.opacity(0.2))
-                    .cornerRadius(6)
-                    .foregroundColor(.green)
+
+                // Indikator Status Sensor
+                if hideFinancials {
+                    Text("Sensor Aktif (Mode SS)")
+                        .font(.caption2)
+                        .bold()
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Color.orange.opacity(0.2))
+                        .cornerRadius(6)
+                        .foregroundColor(.orange)
+                } else {
+                    Text("Live Monitor")
+                        .font(.caption2)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Color.green.opacity(0.2))
+                        .cornerRadius(6)
+                        .foregroundColor(.green)
+                }
             }
 
-            Text(formatIDR(totalUntung))
+            // Angka Untung Bersih (Disensor jika Mode Mata aktif)
+            Text(hideFinancials ? "Rp ••••••••" : formatIDR(totalUntung))
                 .font(.system(size: 32, weight: .heavy, design: .rounded))
-                .foregroundColor(.green)
+                .foregroundColor(hideFinancials ? .gray : .green)
 
             Divider().background(Color.white.opacity(0.1))
 
@@ -224,18 +354,18 @@ struct ContentView: View {
                     Text("Total Modal")
                         .font(.caption2)
                         .foregroundColor(.gray)
-                    Text(formatIDR(totalModal))
+                    Text(hideFinancials ? "Rp ••••••" : formatIDR(totalModal))
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(hideFinancials ? .gray : .white)
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 4) {
                     Text("Total Omset")
                         .font(.caption2)
                         .foregroundColor(.gray)
-                    Text(formatIDR(totalOmset))
+                    Text(hideFinancials ? "Rp ••••••" : formatIDR(totalOmset))
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.cyan)
+                        .foregroundColor(hideFinancials ? .gray : .cyan)
                 }
             }
         }
@@ -248,37 +378,32 @@ struct ContentView: View {
     private func buyerCard(item: SaleItem) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .center) {
-                // Tombol Nama Buyer: Diklik langsung menuju WhatsApp atau Telegram
+                // Tombol Nama Buyer: Nomor HP disembunyikan total
                 Button {
                     openChatLink(item.kontakBuyer)
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: item.kontakBuyer.contains("@") ? "paperplane.fill" : "phone.bubble.left.fill")
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(item.namaBuyer.isEmpty ? "Tanpa Nama" : item.namaBuyer)
-                                .bold()
-                                .foregroundColor(.cyan)
-                            if !item.kontakBuyer.isEmpty {
-                                Text(item.kontakBuyer)
-                                    .font(.caption2)
-                                    .foregroundColor(.cyan.opacity(0.75))
-                            }
-                        }
+                        Text(item.namaBuyer.isEmpty ? "Tanpa Nama" : item.namaBuyer)
+                            .bold()
+                            .foregroundColor(.cyan)
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
                     .background(Color.cyan.opacity(0.15))
                     .cornerRadius(8)
                 }
 
                 Spacer()
 
-                // Untung Bersih & Tombol Edit (Pensil)
                 HStack(spacing: 12) {
-                    Text("+\(formatIDR(item.untung))")
-                        .font(.footnote)
-                        .bold()
-                        .foregroundColor(.green)
+                    // Badge Untung: Hilang sepenuhnya saat mode sensor aktif agar tidak kelihatan di SS
+                    if !hideFinancials {
+                        Text("+\(formatIDR(item.untung))")
+                            .font(.footnote)
+                            .bold()
+                            .foregroundColor(.green)
+                    }
 
                     Button {
                         itemToEdit = item
@@ -290,7 +415,7 @@ struct ContentView: View {
                 }
             }
 
-            // Tampilan Nomor UDID Lengkap
+            // Nomor UDID Full
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text("UDID:")
@@ -323,12 +448,22 @@ struct ContentView: View {
 
             Divider().background(Color.white.opacity(0.1))
 
-            HStack {
-                StatusGaransiView(now: timerNow, exp: item.expiredDate, durasi: item.durasiHari)
-                Spacer()
-                Text("Daftar: \(formatDate(item.tanggalDaftar))")
-                    .font(.caption2)
-                    .foregroundColor(.gray)
+            // Status Garansi & Tanggal
+            VStack(spacing: 6) {
+                HStack {
+                    StatusGaransiView(now: timerNow, exp: item.expiredDate, durasi: item.durasiHari)
+                    Spacer()
+                    Text("Exp: \(formatDate(item.expiredDate))")
+                        .font(.caption2)
+                        .bold()
+                        .foregroundColor(.orange.opacity(0.9))
+                }
+                HStack {
+                    Spacer()
+                    Text("Daftar: \(formatDate(item.tanggalDaftar))")
+                        .font(.system(size: 10))
+                        .foregroundColor(.gray)
+                }
             }
         }
         .padding()
@@ -357,6 +492,47 @@ struct ContentView: View {
 
         if let url = URL(string: urlString) {
             openURL(url)
+        }
+    }
+
+    private func exportBackup() {
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .prettyPrinted
+            let data = try encoder.encode(items)
+
+            let df = DateFormatter()
+            df.dateFormat = "yyyyMMdd_HHmmss"
+            let fileName = "Backup_CertManager_\(df.string(from: Date())).json"
+            let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+
+            try data.write(to: tempURL)
+            backupFileURL = tempURL
+            showShareSheet = true
+        } catch {
+            alertMessage = "Gagal mengekspor data: \(error.localizedDescription)"
+            showAlert = true
+        }
+    }
+
+    private func handleImportBackup(result: Result<URL, Error>) {
+        do {
+            let fileURL = try result.get()
+            let canAccess = fileURL.startAccessingSecurityScopedResource()
+            defer {
+                if canAccess { fileURL.stopAccessingSecurityScopedResource() }
+            }
+
+            let data = try Data(contentsOf: fileURL)
+            let importedItems = try JSONDecoder().decode([SaleItem].self, from: data)
+
+            items = importedItems
+            saveData()
+            alertMessage = "Sukses! Berhasil memulihkan \(importedItems.count) data transaksi."
+            showAlert = true
+        } catch {
+            alertMessage = "Gagal memulihkan file: Berkas rusak atau format tidak sesuai."
+            showAlert = true
         }
     }
 
