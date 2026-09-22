@@ -1,0 +1,44 @@
+name: Build iBaalSales IPA
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build-ipa:
+    name: Compile & Package IPA
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode Project
+        run: xcodegen generate
+
+      - name: Build App
+        run: |
+          xcodebuild -project iBaalSales.xcodeproj \
+            -scheme iBaalSales \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/iBaalSales.xcarchive \
+            archive \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
+
+      - name: Package Payload to IPA
+        run: |
+          mkdir -p Payload
+          cp -r build/iBaalSales.xcarchive/Products/Applications/iBaalSales.app Payload/
+          zip -r iBaalSales.ipa Payload
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: iBaalSales-IPA
+          path: iBaalSales.ipa
