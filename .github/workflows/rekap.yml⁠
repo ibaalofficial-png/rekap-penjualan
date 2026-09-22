@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       buyer_contact:
-        description: "👤 Kontak Buyer (@username_tele atau 08xxx WhatsApp)"
+        description: "👤 Kontak Buyer (@username Tele / 08xxx WA)"
         required: true
         type: string
       udid:
@@ -33,13 +33,13 @@ on:
         type: string
         default: "150000"
       catatan:
-        description: "📝 Catatan (Opsional)"
+        description: "📝 Catatan Tambahan (Opsional)"
         required: false
         type: string
         default: "-"
 
   schedule:
-    # Berjalan otomatis tiap jam 00:00 WIB (17:00 UTC) untuk update countdown sisa hari
+    # Update live countdown tiap jam 00:00 WIB (17:00 UTC)
     - cron: '0 17 * * *'
 
 permissions:
@@ -73,7 +73,6 @@ jobs:
           import os, csv, re
           from datetime import datetime, timedelta, timezone
 
-          # Zona Waktu Indonesia Barat (WIB = UTC+7)
           wib = timezone(timedelta(hours=7))
           now = datetime.now(wib)
           tgl_sekarang_str = now.strftime("%d-%m-%Y %H:%M WIB")
@@ -97,7 +96,6 @@ jobs:
 
           event_name = os.environ.get("EVENT_NAME", "")
 
-          # 1. Jika input transaksi baru
           if event_name == "workflow_dispatch":
               buyer = os.environ.get("BUYER_CONTACT", "").strip()
               udid = os.environ.get("UDID", "").strip()
@@ -114,10 +112,8 @@ jobs:
               except ValueError:
                   harga_jual = 0
 
-              # Untung terhitung otomatis
               untung = harga_jual - modal
 
-              # Hitung tanggal target expired
               if "1 Tahun" in plan:
                   exp_dt = now + timedelta(days=365)
               elif "6 Bulan" in plan:
@@ -149,13 +145,11 @@ jobs:
                   writer.writeheader()
                   writer.writerows(rows)
 
-          # 2. Fungsi Direct Clickable Link Tele / WA
           def format_contact_link(contact_str):
               c = contact_str.strip()
               if not c or c == "-":
                   return "-"
               
-              # Cek jika Telegram (@username)
               if "@" in c:
                   match = re.search(r'@([a-zA-Z0-9_]+)', c)
                   if match:
@@ -163,12 +157,10 @@ jobs:
                       return f"[{c}](https://t.me/{uname})"
                   return c
 
-              # Cek jika format link langsung
               if "t.me/" in c or "wa.me/" in c:
                   url = c if c.startswith("http") else f"https://{c}"
                   return f"[{c}]({url})"
 
-              # Cek jika nomor HP (WhatsApp)
               digits = "".join(filter(str.isdigit, c))
               if len(digits) >= 9:
                   if digits.startswith("08"):
@@ -188,13 +180,11 @@ jobs:
               except:
                   return "Rp 0"
 
-          # 3. Metrik Total Keuangan
           total_order = len(rows)
           total_modal = sum(int(r.get("Modal", 0)) for r in rows)
           total_omset = sum(int(r.get("Harga_Jual", 0)) for r in rows)
           total_untung = sum(int(r.get("Untung", 0)) for r in rows)
 
-          # 4. Generate Dashboard REKAP_PENJUALAN.md
           md = f"""# 📊 DASHBOARD PENJUALAN & LIVE GARANSI CERT
 
 > Status data diperbarui: **{tgl_sekarang_str}**  
@@ -220,11 +210,9 @@ jobs:
               raw_udid = r.get("UDID", "")
               short_udid = (raw_udid[:8] + "..." + raw_udid[-6:]) if len(raw_udid) > 16 else raw_udid
 
-              # Link otomatis Tele / WhatsApp
               buyer_raw = r.get("Nama_Tele_WA", "-")
               buyer_link = format_contact_link(buyer_raw)
 
-              # Hitung Sisa Garansi Live
               plan = r.get("Plan_Garansi", "")
               if "Tanpa" in plan:
                   garansi_live = "⚪ Non-Garansi"
@@ -265,4 +253,4 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/penjualan.csv REKAP_PENJUALAN.md
           git commit -m "📊 Update Rekap Penjualan, Direct Link & Live Garansi" || echo "Tidak ada perubahan data."
-          git push origin main
+          git push origin HEAD
