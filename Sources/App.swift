@@ -145,23 +145,30 @@ struct GaransiOption: Identifiable {
     let name: String
 }
 
-// MARK: - Modifier Liquid Glass Style
-struct LiquidGlassModifier: ViewModifier {
-    var cornerRadius: CGFloat = 18
+// MARK: - Extension Helper untuk TextSelection & Glass
+extension View {
+    @ViewBuilder
+    func applyTextSelection(_ enabled: Bool) -> some View {
+        if enabled {
+            self.textSelection(.enabled)
+        } else {
+            self
+        }
+    }
 
-    func body(content: Content) -> some View {
-        content
+    func liquidGlass(cornerRadius: CGFloat = 18) -> some View {
+        self
             .background(.ultraThinMaterial)
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .stroke(
                         LinearGradient(
-                            colors: [
+                            gradient: Gradient(colors: [
                                 Color.white.opacity(0.35),
                                 Color.white.opacity(0.08),
                                 Color.cyan.opacity(0.15)
-                            ],
+                            ]),
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
@@ -169,12 +176,6 @@ struct LiquidGlassModifier: ViewModifier {
                     )
             )
             .shadow(color: Color.black.opacity(0.35), radius: 15, x: 0, y: 8)
-    }
-}
-
-extension View {
-    func liquidGlass(cornerRadius: CGFloat = 18) -> some View {
-        self.modifier(LiquidGlassModifier(cornerRadius: cornerRadius))
     }
 }
 
@@ -447,7 +448,6 @@ struct ContentView: View {
 
                 Spacer()
 
-                // Selalu tampil sebagai Live Monitor natural tanpa membocorkan mode sensor
                 Text("Live Monitor")
                     .font(.caption2)
                     .bold()
@@ -581,7 +581,7 @@ struct ContentView: View {
                 }
             }
 
-            // Tampilan UDID (Otomatis disensor jika Mode Mata Aktif)
+            // Tampilan UDID
             VStack(alignment: .leading, spacing: 5) {
                 HStack {
                     Text("UDID:")
@@ -599,7 +599,7 @@ struct ContentView: View {
                 Text(hideFinancials ? maskUDID(item.udid) : item.udid)
                     .font(.system(size: 12, weight: .medium, design: .monospaced))
                     .foregroundColor(.white.opacity(0.95))
-                    .textSelection(hideFinancials ? .disabled : .enabled)
+                    .applyTextSelection(!hideFinancials)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(10)
@@ -640,7 +640,6 @@ struct ContentView: View {
         .padding(.horizontal)
     }
 
-    // Helper Sensor UDID
     private func maskUDID(_ u: String) -> String {
         let clean = u.trimmingCharacters(in: .whitespacesAndNewlines)
         if clean.count >= 12 {
@@ -826,7 +825,7 @@ struct SaleFormSheet: View {
                 }
 
                 Section(header: Text("File ZIP Sertifikat (Opsional)"), footer: Text("Saat dibagikan, file otomatis bernama 'password - [password].zip'")) {
-                    if let _ = zipFileName {
+                    if zipFileName != nil {
                         HStack {
                             Image(systemName: "doc.zipper")
                                 .foregroundColor(.cyan)
