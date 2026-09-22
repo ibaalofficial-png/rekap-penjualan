@@ -1,264 +1,45 @@
-name: Rekap Penjualan & Live Garansi
+name: Build iBaalSales IPA
 
 on:
   push:
     branches: [ main, master ]
   workflow_dispatch:
-    inputs:
-      buyer_contact:
-        description: "👤 Kontak Buyer (@username Tele / 08xxx WA)"
-        required: true
-        type: string
-        default: "@username"
-      udid:
-        description: "📱 Nomor UDID Buyer"
-        required: true
-        type: string
-        default: "00008030-001A2B3C4D5E6F7G"
-      plan_garansi:
-        description: "🛡️ Paket Garansi"
-        required: true
-        type: choice
-        options:
-          - "1 Tahun (365 Hari)"
-          - "6 Bulan (180 Hari)"
-          - "3 Bulan (90 Hari)"
-          - "1 Bulan (30 Hari)"
-          - "Tanpa Garansi"
-        default: "1 Tahun (365 Hari)"
-      modal:
-        description: "🏷️ Modal per Slot (Rp, angka saja)"
-        required: true
-        type: string
-        default: "75000"
-      harga_jual:
-        description: "💵 Harga Jual ke Buyer (Rp, angka saja)"
-        required: true
-        type: string
-        default: "150000"
-      catatan:
-        description: "📝 Catatan Tambahan (Opsional)"
-        required: false
-        type: string
-        default: "-"
-
-  schedule:
-    # Update sisa hari otomatis tiap jam 00:00 WIB (17:00 UTC)
-    - cron: '0 17 * * *'
-
-permissions:
-  contents: write
 
 jobs:
-  rekap:
-    name: Proses Data & Dashboard
-    runs-on: ubuntu-latest
+  build-ipa:
+    name: Compile & Package IPA
+    runs-on: macos-14
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout Repo
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode Project
+        run: xcodegen generate
+
+      - name: Build App
+        run: |
+          xcodebuild -project iBaalSales.xcodeproj \
+            -scheme iBaalSales \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/iBaalSales.xcarchive \
+            archive \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
+
+      - name: Package Payload to IPA
+        run: |
+          mkdir -p Payload
+          cp -r build/iBaalSales.xcarchive/Products/Applications/iBaalSales.app Payload/
+          zip -r iBaalSales.ipa Payload
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
         with:
-          python-version: "3.11"
-
-      - name: Eksekusi Python Rekap
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          BUYER_CONTACT: ${{ github.event.inputs.buyer_contact }}
-          UDID: ${{ github.event.inputs.udid }}
-          PLAN_GARANSI: ${{ github.event.inputs.plan_garansi }}
-          MODAL: ${{ github.event.inputs.modal }}
-          HARGA_JUAL: ${{ github.event.inputs.harga_jual }}
-          CATATAN: ${{ github.event.inputs.catatan }}
-        run: |
-          python3 - << 'EOF'
-          import os, csv, re
-          from datetime import datetime, timedelta, timezone
-
-          wib = timezone(timedelta(hours=7))
-          now = datetime.now(wib)
-          tgl_sekarang_str = now.strftime("%d-%m-%Y %H:%M WIB")
-
-          os.makedirs("data", exist_ok=True)
-          csv_path = "data/penjualan.csv"
-          file_exists = os.path.isfile(csv_path)
-
-          fields = [
-              "ID", "Tanggal", "Nama_Tele_WA", "UDID", 
-              "Modal", "Harga_Jual", "Untung", 
-              "Plan_Garansi", "Expired_Timestamp", "Catatan"
-          ]
-
-          rows = []
-          if file_exists:
-              with open(csv_path, mode="r", encoding="utf-8") as f:
-                  reader = csv.DictReader(f)
-                  for r in reader:
-                      rows.append(r)
-
-          event_name = os.environ.get("EVENT_NAME", "")
-
-          # Tambah transaksi baru jika dijalankan manual
-          if event_name == "workflow_dispatch":
-              buyer = os.environ.get("BUYER_CONTACT", "").strip()
-              udid = os.environ.get("UDID", "").strip()
-              plan = os.environ.get("PLAN_GARANSI", "").strip()
-              catatan = os.environ.get("CATATAN", "-").strip()
-
-              try:
-                  modal = int(os.environ.get("MODAL", "0").replace(".", "").replace(",", ""))
-              except ValueError:
-                  modal = 0
-
-              try:
-                  harga_jual = int(os.environ.get("HARGA_JUAL", "0").replace(".", "").replace(",", ""))
-              except ValueError:
-                  harga_jual = 0
-
-              untung = harga_jual - modal
-
-              if "1 Tahun" in plan:
-                  exp_dt = now + timedelta(days=365)
-              elif "6 Bulan" in plan:
-                  exp_dt = now + timedelta(days=180)
-              elif "3 Bulan" in plan:
-                  exp_dt = now + timedelta(days=90)
-              elif "1 Bulan" in plan:
-                  exp_dt = now + timedelta(days=30)
-              else:
-                  exp_dt = now
-
-              new_id = len(rows) + 1
-              new_entry = {
-                  "ID": str(new_id),
-                  "Tanggal": now.strftime("%d-%m-%Y %H:%M"),
-                  "Nama_Tele_WA": buyer,
-                  "UDID": udid,
-                  "Modal": str(modal),
-                  "Harga_Jual": str(harga_jual),
-                  "Untung": str(untung),
-                  "Plan_Garansi": plan,
-                  "Expired_Timestamp": exp_dt.isoformat(),
-                  "Catatan": catatan
-              }
-              rows.append(new_entry)
-
-              with open(csv_path, mode="w", newline="", encoding="utf-8") as f:
-                  writer = csv.DictWriter(f, fieldnames=fields)
-                  writer.writeheader()
-                  writer.writerows(rows)
-
-          def format_contact_link(contact_str):
-              c = contact_str.strip()
-              if not c or c == "-":
-                  return "-"
-              
-              if "@" in c:
-                  match = re.search(r'@([a-zA-Z0-9_]+)', c)
-                  if match:
-                      uname = match.group(1)
-                      return f"[{c}](https://t.me/{uname})"
-                  return c
-
-              if "t.me/" in c or "wa.me/" in c:
-                  url = c if c.startswith("http") else f"https://{c}"
-                  return f"[{c}]({url})"
-
-              digits = "".join(filter(str.isdigit, c))
-              if len(digits) >= 9:
-                  if digits.startswith("08"):
-                      wa_num = "62" + digits[1:]
-                  elif digits.startswith("62"):
-                      wa_num = digits
-                  else:
-                      wa_num = digits
-                  return f"[{c}](https://wa.me/{wa_num})"
-
-              return c
-
-          def idr(val):
-              try:
-                  n = int(val)
-                  return f"Rp {n:,.0f}".replace(",", ".")
-              except:
-                  return "Rp 0"
-
-          total_order = len(rows)
-          total_modal = sum(int(r.get("Modal", 0)) for r in rows)
-          total_omset = sum(int(r.get("Harga_Jual", 0)) for r in rows)
-          total_untung = sum(int(r.get("Untung", 0)) for r in rows)
-
-          md = f"""# 📊 DASHBOARD PENJUALAN & LIVE GARANSI CERT
-
-> Status diperbarui: **{tgl_sekarang_str}**  
-> *Sisa hari garansi berkurang otomatis setiap hari.*
-
----
-
-### 💰 Ringkasan Keuntungan & Penjualan
-
-| 📱 Total Terjual | 🏷️ Total Modal | 💵 Total Omset | 🚀 Total Untung Bersih |
-| :---: | :---: | :---: | :---: |
-| **{total_order} Unit** | **{idr(total_modal)}** | **{idr(total_omset)}** | **{idr(total_untung)}** |
-
----
-
-### 📋 Tabel Rekap Penjualan
-
-| No | Tanggal | Nama Tele/WA | UDID | Modal | Untung | Garansi Aktif (Live) |
-| :-: | :--- | :--- | :--- | -: | -: | :---: |
-"""
-
-          if not rows:
-              md += "| - | - | *Belum ada data penjualan* | - | - | - | - |\n"
-          else:
-              for r in reversed(rows):
-                  raw_udid = r.get("UDID", "")
-                  short_udid = (raw_udid[:8] + "..." + raw_udid[-6:]) if len(raw_udid) > 16 else raw_udid
-
-                  buyer_raw = r.get("Nama_Tele_WA", "-")
-                  buyer_link = format_contact_link(buyer_raw)
-
-                  plan = r.get("Plan_Garansi", "")
-                  if "Tanpa" in plan:
-                      garansi_live = "⚪ Non-Garansi"
-                  else:
-                      exp_str = r.get("Expired_Timestamp", "")
-                      try:
-                          exp_dt = datetime.fromisoformat(exp_str)
-                          delta = exp_dt - now
-                          if delta.total_seconds() > 0:
-                              hari = delta.days
-                              jam = delta.seconds // 3600
-                              garansi_live = f"🟢 **{hari} Hari {jam} Jam lagi**"
-                          else:
-                              garansi_live = "🔴 **Garansi Habis**"
-                      except:
-                          garansi_live = "⚪ Non-Garansi"
-
-                  tgl = r.get("Tanggal", "-")
-                  mod = idr(r.get("Modal", 0))
-                  unt = idr(r.get("Untung", 0))
-
-                  md += f"| {r['ID']} | {tgl} | {buyer_link} | `{short_udid}` | {mod} | **{unt}** | {garansi_live} |\n"
-
-          md += """
----
-*Catatan: Klik nama Tele/WA untuk langsung chat. Kolom untung terhitung otomatis.*
-"""
-
-          with open("REKAP_PENJUALAN.md", "w", encoding="utf-8") as f:
-              f.write(md)
-
-          print("Rekap penjualan selesai diproses!")
-          EOF
-
-      - name: Commit & Push Update
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/penjualan.csv REKAP_PENJUALAN.md
-          git commit -m "📊 Init / Update Rekap Penjualan [skip ci]" || echo "Tidak ada perubahan data."
-          git push origin HEAD
+          name: iBaalSales-IPA
+          path: iBaalSales.ipa
