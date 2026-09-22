@@ -1,3 +1,9 @@
+Penyebabnya karena di teks keterangannya kemarin kelupaan dipasang kondisi hideFinancials.
+Jadi meski angka nominalnya sudah disensor jadi Rp ••••••••, teks di bawahnya masih membaca hitungan matematika (omset - modal = minus Rp200.000), alhasil teks "Belum Balik Modal (Kurang Rp 200.000)" masih bocor dan tetap terbaca. Kalau mau buat bahan tangkapan layar (screenshot) testimoni tentu jadi lucu kalau masih ada tulisan belum balik modal.
+Sekarang saat tombol mata 👁️ ditekan, teks di bawahnya otomatis ikut disensor menjadi:
+Mode Sensor Finansial Aktif 🔒
+Kode Lengkap: Sources/App.swift
+Buka file Sources/App.swift di GitHub, klik tombol pensil (Edit), hapus seluruh kodenya lalu tempel kode perbaikan ini:
 import SwiftUI
 import UIKit
 import Combine
@@ -141,7 +147,7 @@ struct SaleItem: Identifiable, Codable {
         self.id = id
         self.tanggalDaftar = tanggalDaftar
         self.namaBuyer = namaBuyer
-        self.kontakBuyer = kontakBuyer
+        self.kontakBuyer = contactsClean(kontakBuyer)
         self.udid = udid
         self.hargaJual = hargaJual
         self.durasiHari = durasiHari
@@ -149,6 +155,10 @@ struct SaleItem: Identifiable, Codable {
         self.batchNumber = batchNumber
         self.zipFileName = zipFileName
         self.certPassword = certPassword
+    }
+
+    private static func contactsClean(_ val: String) -> String {
+        val.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     init(from decoder: Decoder) throws {
@@ -209,7 +219,6 @@ extension View {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .fill(.ultraThinMaterial)
 
-                    // Pantulan Cahaya Atas Kaca (Specular Highlight)
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .fill(
                             LinearGradient(
@@ -329,7 +338,6 @@ struct LiquidPrismSwitch: View {
                     .background(
                         ZStack {
                             if isSelected {
-                                // Lensa Kaca Cair dengan Pembiasan Pelangi (Chromatic Aberration)
                                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                                     .fill(.ultraThinMaterial)
 
@@ -345,7 +353,6 @@ struct LiquidPrismSwitch: View {
                                         )
                                     )
 
-                                // Cincin Prisma Pelangi
                                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                                     .stroke(
                                         AngularGradient(
@@ -497,7 +504,6 @@ struct ContentView: View {
             ZStack {
                 Color.black.ignoresSafeArea()
 
-                // Ambient Neon Glow
                 Circle()
                     .fill(Color.cyan.opacity(0.30))
                     .frame(width: 320, height: 320)
@@ -520,7 +526,6 @@ struct ContentView: View {
                     VStack(spacing: 18) {
                         summaryDashboardView
 
-                        // Banner Akses Arsip
                         if completedBatchesCount > 0 {
                             Button {
                                 showHistoryModal = true
@@ -545,7 +550,6 @@ struct ContentView: View {
                             .padding(.horizontal)
                         }
 
-                        // Switch Gelembung Prisma Kaca Cair (Liquid Lens)
                         LiquidPrismSwitch(selected: $selectedFilter)
 
                         HStack {
@@ -594,7 +598,6 @@ struct ContentView: View {
             }
             .navigationTitle("Cert Manager ⚡")
             .searchable(text: $searchText, prompt: "Cari nama, UDID, tipe HP...")
-            // MARK: - Toolbar Atas Asli (Navigation Bar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Menu {
@@ -803,9 +806,16 @@ struct ContentView: View {
                     .foregroundColor(hideFinancials ? .gray : (untungKloterAktif >= 0 ? .green : .red))
                     .shadow(color: hideFinancials ? .clear : (untungKloterAktif >= 0 ? Color.green.opacity(0.3) : Color.red.opacity(0.3)), radius: 10)
 
-                Text(untungKloterAktif >= 0 ? "Keuntungan Bersih Kloter Ini" : "Belum Balik Modal (Kurang \(AppFormatters.idr(abs(untungKloterAktif))))")
-                    .font(.caption2)
-                    .foregroundColor(untungKloterAktif >= 0 ? .green.opacity(0.85) : .orange)
+                // KOREKSI SENSOR FINANSIAL
+                if hideFinancials {
+                    Text("Mode Sensor Finansial Aktif 🔒")
+                        .font(.caption2)
+                        .foregroundColor(.gray)
+                } else {
+                    Text(untungKloterAktif >= 0 ? "Keuntungan Bersih Kloter Ini" : "Belum Balik Modal (Kurang \(AppFormatters.idr(abs(untungKloterAktif))))")
+                        .font(.caption2)
+                        .foregroundColor(untungKloterAktif >= 0 ? .green.opacity(0.85) : .orange)
+                }
             }
 
             VStack(spacing: 8) {
@@ -1625,3 +1635,4 @@ struct SaleFormSheet: View {
         dismiss()
     }
 }
+
