@@ -23,6 +23,11 @@ struct SaleItem: Identifiable, Codable {
         Calendar.current.date(byAdding: .day, value: durasiHari, to: tanggalDaftar) ?? tanggalDaftar
     }
 
+    var isTelegram: Bool {
+        let clean = kontakBuyer.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return clean.hasPrefix("@") || clean.contains("t.me/")
+    }
+
     enum CodingKeys: String, CodingKey {
         case id, tanggalDaftar, namaBuyer, kontakBuyer, udid, modal, hargaJual, durasiHari, catatan
     }
@@ -321,7 +326,6 @@ struct ContentView: View {
 
                 Spacer()
 
-                // Indikator Status Sensor
                 if hideFinancials {
                     Text("Sensor Aktif (Mode SS)")
                         .font(.caption2)
@@ -342,7 +346,6 @@ struct ContentView: View {
                 }
             }
 
-            // Angka Untung Bersih (Disensor jika Mode Mata aktif)
             Text(hideFinancials ? "Rp ••••••••" : formatIDR(totalUntung))
                 .font(.system(size: 32, weight: .heavy, design: .rounded))
                 .foregroundColor(hideFinancials ? .gray : .green)
@@ -376,28 +379,33 @@ struct ContentView: View {
     }
 
     private func buyerCard(item: SaleItem) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        // Logika Pembeda Ikon & Warna (WhatsApp vs Telegram)
+        let isTele = item.isTelegram
+        let badgeColor: Color = isTele ? Color(red: 0.20, green: 0.65, blue: 0.95) : Color(red: 0.15, green: 0.82, blue: 0.45)
+        let iconName = isTele ? "paperplane.fill" : "phone.bubble.left.fill"
+
+        return VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .center) {
-                // Tombol Nama Buyer: Nomor HP disembunyikan total
+                // Tombol Buyer: Ikon & Warna sesuai WA/Tele, nomor HP disembunyikan
                 Button {
                     openChatLink(item.kontakBuyer)
                 } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: item.kontakBuyer.contains("@") ? "paperplane.fill" : "phone.bubble.left.fill")
+                        Image(systemName: iconName)
+                            .font(.system(size: 13, weight: .bold))
                         Text(item.namaBuyer.isEmpty ? "Tanpa Nama" : item.namaBuyer)
                             .bold()
-                            .foregroundColor(.cyan)
                     }
+                    .foregroundColor(badgeColor)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 7)
-                    .background(Color.cyan.opacity(0.15))
+                    .background(badgeColor.opacity(0.16))
                     .cornerRadius(8)
                 }
 
                 Spacer()
 
                 HStack(spacing: 12) {
-                    // Badge Untung: Hilang sepenuhnya saat mode sensor aktif agar tidak kelihatan di SS
                     if !hideFinancials {
                         Text("+\(formatIDR(item.untung))")
                             .font(.footnote)
@@ -440,8 +448,9 @@ struct ContentView: View {
             .background(Color.black.opacity(0.25))
             .cornerRadius(8)
 
+            // Catatan Tipe HP dengan Emoticon HP 📱
             if !item.catatan.isEmpty && item.catatan != "-" {
-                Text("📝 \(item.catatan)")
+                Text("📱 \(item.catatan)")
                     .font(.caption2)
                     .foregroundColor(.gray)
             }
@@ -479,6 +488,12 @@ struct ContentView: View {
         if clean.hasPrefix("@") {
             let user = clean.replacingOccurrences(of: "@", with: "")
             urlString = "https://t.me/\(user)"
+        } else if clean.lowercased().contains("t.me/") {
+            if clean.hasPrefix("http") {
+                urlString = clean
+            } else {
+                urlString = "https://\(clean)"
+            }
         } else {
             let digits = clean.filter { $0.isNumber }
             if digits.hasPrefix("08") {
@@ -645,8 +660,8 @@ struct SaleFormSheet: View {
                     }
                 }
 
-                Section(header: Text("Catatan")) {
-                    TextField("Misal: iPhone 14 Pro Max 256GB", text: $catatan)
+                Section(header: Text("Catatan Perangkat")) {
+                    TextField("Misal: iPhone 15 Pro Max 256GB", text: $catatan)
                 }
 
                 if itemToEdit != nil {
