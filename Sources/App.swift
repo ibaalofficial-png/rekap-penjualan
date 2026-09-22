@@ -66,7 +66,7 @@ struct StatusGaransiView: View {
                 .frame(width: 8, height: 8)
             Text(status.text)
                 .font(.caption)
-                .fontWeight(.bold)
+                .bold()
                 .foregroundColor(status.color)
         }
     }
@@ -155,7 +155,7 @@ struct ContentView: View {
             HStack {
                 Text("🚀 KEUNTUNGAN BERSIH")
                     .font(.caption)
-                    .fontWeight(.bold)
+                    .bold()
                     .foregroundColor(.green.opacity(0.8))
                 Spacer()
                 Text("Live Monitor")
@@ -179,8 +179,7 @@ struct ContentView: View {
                         .font(.caption2)
                         .foregroundColor(.gray)
                     Text(formatIDR(totalModal))
-                        .font(.footnote)
-                        .fontWeight(.semibold)
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(.white)
                 }
                 Spacer()
@@ -189,8 +188,7 @@ struct ContentView: View {
                         .font(.caption2)
                         .foregroundColor(.gray)
                     Text(formatIDR(totalOmset))
-                        .font(.footnote)
-                        .fontWeight(.semibold)
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(.cyan)
                 }
             }
@@ -210,7 +208,7 @@ struct ContentView: View {
                     HStack(spacing: 6) {
                         Image(systemName: item.kontakBuyer.contains("@") ? "paperplane.fill" : "phone.bubble.left.fill")
                         Text(item.kontakBuyer)
-                            .fontWeight(.bold)
+                            .bold()
                     }
                     .font(.subheadline)
                     .foregroundColor(.cyan)
@@ -224,7 +222,7 @@ struct ContentView: View {
 
                 Text("+\(formatIDR(item.untung))")
                     .font(.footnote)
-                    .fontWeight(.bold)
+                    .bold()
                     .foregroundColor(.green)
             }
 
@@ -373,10 +371,10 @@ struct AddSaleView: View {
                     }
                     HStack {
                         Text("Untung Bersih")
-                            .fontWeight(.bold)
+                            .bold()
                         Spacer()
                         Text("Rp \(untungOtomatis)")
-                            .fontWeight(.heavy)
+                            .font(.system(size: 16, weight: .heavy))
                             .foregroundColor(.green)
                     }
                 }
@@ -391,7 +389,7 @@ struct AddSaleView: View {
                     Button("Batal") { dismiss() }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Simpan") {
+                    Button {
                         let item = SaleItem(
                             tanggalDaftar: Date(),
                             kontakBuyer: kontakBuyer.isEmpty ? "@buyer" : kontakBuyer,
@@ -403,9 +401,11 @@ struct AddSaleView: View {
                         )
                         onSave(item)
                         dismiss()
+                    } label: {
+                        Text("Simpan")
+                            .bold()
+                            .foregroundColor(.cyan)
                     }
-                    .fontWeight(.bold)
-                    .foregroundColor(.cyan)
                 }
             }
         }
