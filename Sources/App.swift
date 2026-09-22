@@ -141,7 +141,7 @@ struct SaleItem: Identifiable, Codable {
         self.id = id
         self.tanggalDaftar = tanggalDaftar
         self.namaBuyer = namaBuyer
-        self.kontakBuyer = contactsClean(kontakBuyer)
+        self.kontakBuyer = kontakBuyer.trimmingCharacters(in: .whitespacesAndNewlines)
         self.udid = udid
         self.hargaJual = hargaJual
         self.durasiHari = durasiHari
@@ -149,10 +149,6 @@ struct SaleItem: Identifiable, Codable {
         self.batchNumber = batchNumber
         self.zipFileName = zipFileName
         self.certPassword = certPassword
-    }
-
-    private static func contactsClean(_ val: String) -> String {
-        val.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     init(from decoder: Decoder) throws {
@@ -192,7 +188,7 @@ struct GaransiOption: Identifiable {
     let name: String
 }
 
-// MARK: - Extension Liquid Glass Modern
+// MARK: - Extension Liquid Glass Modern (Kompatibel Penuh iOS 15.0+)
 extension View {
     @ViewBuilder
     func applyTextSelection(_ enabled: Bool) -> some View {
@@ -216,11 +212,11 @@ extension View {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .fill(
                             LinearGradient(
-                                colors: [
+                                gradient: Gradient(colors: [
                                     Color.white.opacity(0.14),
                                     Color.white.opacity(0.02),
                                     Color.clear
-                                ],
+                                ]),
                                 startPoint: .top,
                                 endPoint: .center
                             )
@@ -232,11 +228,11 @@ extension View {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .stroke(
                         LinearGradient(
-                            stops: [
-                                .init(color: Color.white.opacity(0.48), location: 0.0),
-                                .init(color: Color.white.opacity(0.10), location: 0.45),
-                                .init(color: Color.cyan.opacity(0.28), location: 1.0)
-                            ],
+                            gradient: Gradient(stops: [
+                                Gradient.Stop(color: Color.white.opacity(0.48), location: 0.0),
+                                Gradient.Stop(color: Color.white.opacity(0.10), location: 0.45),
+                                Gradient.Stop(color: Color.cyan.opacity(0.28), location: 1.0)
+                            ]),
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
@@ -297,14 +293,13 @@ struct StatusGaransiView: View {
                 .frame(width: 8, height: 8)
                 .shadow(color: status.color.opacity(0.8), radius: 4)
             Text(status.text)
-                .font(.caption)
-                .bold()
+                .font(.system(size: 12, weight: .bold))
                 .foregroundColor(status.color)
         }
     }
 }
 
-// MARK: - Switch Gelembung Prisma Kaca Cair (Liquid Prism Switch)
+// MARK: - Switch Gelembung Prisma Kaca Cair (Liquid Lens Switch)
 struct LiquidPrismSwitch: View {
     @Binding var selected: FilterGaransi
     @Namespace private var lensAnimation
@@ -312,70 +307,7 @@ struct LiquidPrismSwitch: View {
     var body: some View {
         HStack(spacing: 8) {
             ForEach(FilterGaransi.allCases) { filter in
-                let isSelected = (selected == filter)
-
-                Button {
-                    withAnimation(.spring(response: 0.38, dampingFraction: 0.74)) {
-                        selected = filter
-                    }
-                } label: {
-                    VStack(spacing: 4) {
-                        Image(systemName: filter.icon)
-                            .font(.system(size: 15, weight: .semibold))
-
-                        Text(filter.rawValue)
-                            .font(.system(size: 11, weight: isSelected ? .heavy : .medium))
-                    }
-                    .foregroundColor(isSelected ? .white : .white.opacity(0.48))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 9)
-                    .background(
-                        ZStack {
-                            if isSelected {
-                                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                    .fill(.ultraThinMaterial)
-
-                                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                    .fill(Color.white.opacity(0.09))
-
-                                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [Color.white.opacity(0.35), Color.clear],
-                                            startPoint: .top,
-                                            endPoint: .bottom
-                                        )
-                                    )
-
-                                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                    .stroke(
-                                        AngularGradient(
-                                            gradient: Gradient(colors: [
-                                                Color.cyan,
-                                                Color.blue,
-                                                Color.purple,
-                                                Color.pink,
-                                                Color.orange,
-                                                Color.yellow,
-                                                Color.green,
-                                                Color.cyan
-                                            ]),
-                                            center: .center
-                                        ),
-                                        lineWidth: 1.6
-                                    )
-                                    .blur(radius: 0.4)
-
-                                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                    .stroke(Color.white.opacity(0.6), lineWidth: 0.6)
-
-                                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                    .matchedGeometryEffect(id: "PRISM_LENS_EFFECT", in: lensAnimation)
-                            }
-                        }
-                    )
-                }
-                .buttonStyle(.plain)
+                prismTabButton(for: filter)
             }
         }
         .padding(5)
@@ -386,15 +318,88 @@ struct LiquidPrismSwitch: View {
             RoundedRectangle(cornerRadius: 23, style: .continuous)
                 .stroke(
                     LinearGradient(
-                        colors: [Color.white.opacity(0.35), Color.white.opacity(0.06), Color.cyan.opacity(0.20)],
+                        gradient: Gradient(colors: [
+                            Color.white.opacity(0.35),
+                            Color.white.opacity(0.06),
+                            Color.cyan.opacity(0.20)
+                        ]),
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
                     lineWidth: 1.1
                 )
         )
-        .shadow(color: Color.black.opacity(0.5), radius: 18, y: 8)
+        .shadow(color: Color.black.opacity(0.5), radius: 18, x: 0, y: 8)
         .padding(.horizontal)
+    }
+
+    @ViewBuilder
+    private func prismTabButton(for filter: FilterGaransi) -> some View {
+        let isSelected = (selected == filter)
+
+        Button {
+            withAnimation(.spring(response: 0.38, dampingFraction: 0.74)) {
+                selected = filter
+            }
+        } label: {
+            VStack(spacing: 4) {
+                Image(systemName: filter.icon)
+                    .font(.system(size: 15, weight: .semibold))
+
+                Text(filter.rawValue)
+                    .font(.system(size: 11, weight: isSelected ? .heavy : .medium))
+            }
+            .foregroundColor(isSelected ? .white : .white.opacity(0.48))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 9)
+            .background(
+                ZStack {
+                    if isSelected {
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(.ultraThinMaterial)
+
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(Color.white.opacity(0.09))
+
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [
+                                        Color.white.opacity(0.35),
+                                        Color.clear
+                                    ]),
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(
+                                AngularGradient(
+                                    gradient: Gradient(colors: [
+                                        Color.cyan,
+                                        Color.blue,
+                                        Color.purple,
+                                        Color.pink,
+                                        Color.orange,
+                                        Color.yellow,
+                                        Color.green,
+                                        Color.cyan
+                                    ]),
+                                    center: .center
+                                ),
+                                lineWidth: 1.6
+                            )
+                            .blur(radius: 0.4)
+
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(Color.white.opacity(0.6), lineWidth: 0.6)
+                            .matchedGeometryEffect(id: "PRISM_LENS_EFFECT", in: lensAnimation)
+                    }
+                }
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -528,13 +533,11 @@ struct ContentView: View {
                                     Image(systemName: "archivebox.fill")
                                         .foregroundColor(.green)
                                     Text("\(completedBatchesCount) Kloter Selesai Tersimpan")
-                                        .font(.subheadline)
-                                        .bold()
+                                        .font(.system(size: 14, weight: .bold))
                                         .foregroundColor(.white)
                                     Spacer()
                                     Text("Buka Arsip ➔")
-                                        .font(.caption)
-                                        .bold()
+                                        .font(.system(size: 12, weight: .bold))
                                         .foregroundColor(.green)
                                 }
                                 .padding(14)
@@ -570,13 +573,12 @@ struct ContentView: View {
                             .padding(.top, 40)
                         } else {
                             ForEach(batchesInFiltered, id: \.self) { batch in
-                                let batchSales = itemsInBatch(batch)
                                 VStack(spacing: 10) {
-                                    kloterAccordionHeader(batch: batch, count: batchSales.count)
+                                    kloterAccordionHeader(batch: batch, count: itemsInBatch(batch).count)
 
                                     if isBatchExpanded(batch) {
                                         VStack(spacing: 12) {
-                                            ForEach(batchSales) { item in
+                                            ForEach(itemsInBatch(batch)) { item in
                                                 buyerCard(item: item)
                                             }
                                         }
@@ -715,7 +717,6 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Header Akordeon Liquid Glass
     private func kloterAccordionHeader(batch: Int, count: Int) -> some View {
         let isExpanded = isBatchExpanded(batch)
         let isCurrent = (batch == activeBatchNumber)
@@ -800,14 +801,13 @@ struct ContentView: View {
                     .foregroundColor(hideFinancials ? .gray : (untungKloterAktif >= 0 ? .green : .red))
                     .shadow(color: hideFinancials ? .clear : (untungKloterAktif >= 0 ? Color.green.opacity(0.3) : Color.red.opacity(0.3)), radius: 10)
 
-                // KOREKSI SENSOR FINANSIAL
                 if hideFinancials {
                     Text("Mode Sensor Finansial Aktif 🔒")
-                        .font(.caption2)
+                        .font(.system(size: 11, weight: .medium))
                         .foregroundColor(.gray)
                 } else {
                     Text(untungKloterAktif >= 0 ? "Keuntungan Bersih Kloter Ini" : "Belum Balik Modal (Kurang \(AppFormatters.idr(abs(untungKloterAktif))))")
-                        .font(.caption2)
+                        .font(.system(size: 11, weight: .medium))
                         .foregroundColor(untungKloterAktif >= 0 ? .green.opacity(0.85) : .orange)
                 }
             }
@@ -817,9 +817,8 @@ struct ContentView: View {
                     HStack(spacing: 4) {
                         Image(systemName: "cube.box.fill")
                         Text("\(slotTerjualDiBatchAktif)/5 Slot Terjual")
-                            .bold()
+                            .font(.system(size: 12, weight: .bold))
                     }
-                    .font(.caption)
                     .foregroundColor(slotTerjualDiBatchAktif >= 5 ? .green : .white)
 
                     Spacer()
@@ -901,7 +900,7 @@ struct ContentView: View {
                         Image(systemName: iconName)
                             .font(.system(size: 13, weight: .bold))
                         Text(item.displayName)
-                            .bold()
+                            .font(.system(size: 14, weight: .bold))
                     }
                     .foregroundColor(badgeColor)
                     .padding(.horizontal, 12)
@@ -928,7 +927,7 @@ struct ContentView: View {
                     if !hideFinancials {
                         Text(AppFormatters.idr(item.hargaJual))
                             .font(.footnote)
-                            .bold()
+                            .font(.system(size: 13, weight: .bold))
                             .foregroundColor(.cyan)
                     }
 
@@ -1028,7 +1027,7 @@ struct ContentView: View {
                     Spacer()
                     Text("Garansi s/d: \(item.durasiHari == 0 ? "Non-Garansi" : AppFormatters.date(item.expiredGaransiDate))")
                         .font(.caption2)
-                        .bold()
+                        .font(.system(size: 11, weight: .bold))
                         .foregroundColor(item.durasiHari == 0 ? .gray : .orange.opacity(0.95))
                 }
                 HStack {
@@ -1204,12 +1203,12 @@ struct CompletedBatchCard: View {
                         .foregroundColor(.green)
                     Text("Kloter #\(batchNum)")
                         .font(.headline)
-                        .bold()
+                        .font(.system(size: 16, weight: .bold))
                 }
                 Spacer()
                 Text("5/5 Selesai ✅")
                     .font(.caption2)
-                    .bold()
+                    .font(.system(size: 11, weight: .bold))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
                     .background(Color.green.opacity(0.18))
@@ -1256,7 +1255,7 @@ struct CompletedBatchCard: View {
                         Spacer()
                         Text(hideFinancials ? "••••" : AppFormatters.idr(item.hargaJual))
                             .font(.caption)
-                            .bold()
+                            .font(.system(size: 12, weight: .bold))
                             .foregroundColor(.cyan.opacity(0.9))
                     }
                 }
@@ -1305,7 +1304,7 @@ struct BatchHistorySheet: View {
                         VStack(spacing: 8) {
                             Text("TOTAL KEUNTUNGAN BERSIH ARSIP")
                                 .font(.caption)
-                                .bold()
+                                .font(.system(size: 11, weight: .bold))
                                 .foregroundColor(.green.opacity(0.8))
 
                             Text(hideFinancials ? "Rp ••••••••" : "+\(AppFormatters.idr(totalUntungSemuaKloterSelesai))")
@@ -1353,13 +1352,19 @@ struct EditBatchModalSheet: View {
 
     @State private var modalText = ""
 
+    init(batchNumber: Int, currentModal: Int, onSave: @escaping (Int) -> Void) {
+        self.batchNumber = batchNumber
+        self.currentModal = currentModal
+        self.onSave = onSave
+    }
+
     var body: some View {
         NavigationView {
             Form {
                 Section(header: Text("Modal Kloter #\(batchNumber) (Paket 5 Cert)"), footer: Text("Ubah nominal modal jika kurs dolar supplier pada kloter ini berbeda.")) {
                     HStack {
                         Text("Modal Top-Up (Rp)")
-                            .bold()
+                            .font(.system(size: 15, weight: .bold))
                         Spacer()
                         TextField("200000", text: $modalText)
                             .keyboardType(.numberPad)
@@ -1381,7 +1386,7 @@ struct EditBatchModalSheet: View {
                         dismiss()
                     } label: {
                         Text("Simpan")
-                            .bold()
+                            .font(.system(size: 16, weight: .bold))
                             .foregroundColor(.cyan)
                     }
                 }
@@ -1448,7 +1453,7 @@ struct SaleFormSheet: View {
                 Section(header: Text("Harga Jual Suka-Suka"), footer: Text("Tentukan harga jual sesuai paket garansi yang dipilih pembeli.")) {
                     HStack {
                         Text("Harga Jual (Rp)")
-                            .bold()
+                            .font(.system(size: 15, weight: .bold))
                         Spacer()
                         TextField("60000", text: $hargaJualText)
                             .keyboardType(.numberPad)
@@ -1533,7 +1538,7 @@ struct SaleFormSheet: View {
                             HStack {
                                 Spacer()
                                 Text("Hapus Transaksi Ini")
-                                    .bold()
+                                    .font(.system(size: 15, weight: .bold))
                                     .foregroundColor(.red)
                                 Spacer()
                             }
@@ -1551,7 +1556,7 @@ struct SaleFormSheet: View {
                         validateAndSave()
                     } label: {
                         Text("Simpan")
-                            .bold()
+                            .font(.system(size: 16, weight: .bold))
                             .foregroundColor(.cyan)
                     }
                 }
