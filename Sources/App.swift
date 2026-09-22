@@ -1,6 +1,5 @@
 import SwiftUI
 
-// MARK: - Model Data Penjualan
 struct SaleItem: Identifiable, Codable {
     var id = UUID()
     var tanggalDaftar: Date
@@ -11,16 +10,12 @@ struct SaleItem: Identifiable, Codable {
     var durasiHari: Int
     var catatan: String
 
-    var untung: Int {
-        hargaJual - modal
-    }
-
+    var untung: Int { hargaJual - modal }
     var expiredDate: Date {
         Calendar.current.date(byAdding: .day, value: durasiHari, to: tanggalDaftar) ?? tanggalDaftar
     }
 }
 
-// MARK: - App Main Entry
 @main
 struct iBaalSalesApp: App {
     var body: some Scene {
@@ -31,13 +26,11 @@ struct iBaalSalesApp: App {
     }
 }
 
-// MARK: - Main View
 struct ContentView: View {
     @State private var items: [SaleItem] = []
     @State private var showAddModal = false
     @State private var timerNow = Date()
 
-    // Timer per 1 detik agar countdown sisa garansi jalan mundur terus secara live
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var totalModal: Int { items.reduce(0) { $0 + $1.modal } }
@@ -51,10 +44,8 @@ struct ContentView: View {
 
                 ScrollView {
                     VStack(spacing: 16) {
-                        // 1. Kartu Dashboard Ringkasan Keuangan
                         summaryDashboardView
 
-                        // 2. Judul Daftar Transaksi
                         HStack {
                             Text("DAFTAR PEMBELI & GARANSI")
                                 .font(.system(size: 13, weight: .bold))
@@ -66,7 +57,6 @@ struct ContentView: View {
                         }
                         .padding(.horizontal)
 
-                        // 3. List Kartu Pembeli
                         if items.isEmpty {
                             VStack(spacing: 12) {
                                 Image(systemName: "tray.fill")
@@ -112,7 +102,6 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Header Dashboard Card
     private var summaryDashboardView: some View {
         VStack(spacing: 14) {
             HStack {
@@ -164,11 +153,9 @@ struct ContentView: View {
         .padding(.horizontal)
     }
 
-    // MARK: - Kartu Pembeli
     private func buyerCard(item: SaleItem) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                // Tombol Direct Link Tele / WA
                 Button {
                     openChatLink(item.kontakBuyer)
                 } label: {
@@ -187,14 +174,12 @@ struct ContentView: View {
 
                 Spacer()
 
-                // Tag Untung Bersih
                 Text("+\(formatIDR(item.untung))")
                     .font(.footnote)
                     .fontWeight(.bold)
                     .foregroundColor(.green)
             }
 
-            // Info UDID & Tombol Salin
             HStack {
                 Text("UDID: \(formatUDID(item.udid))")
                     .font(.system(size: 11, design: .monospaced))
@@ -211,7 +196,6 @@ struct ContentView: View {
 
             Divider().background(Color.white.opacity(0.1))
 
-            // Live Countdown Garansi
             HStack {
                 let status = calculateRemaining(from: timerNow, to: item.expiredDate, durasi: item.durasiHari)
                 HStack(spacing: 5) {
@@ -235,9 +219,8 @@ struct ContentView: View {
         .padding(.horizontal)
     }
 
-    // MARK: - Logika Buka Aplikasi WA / Telegram
     private func openChatLink(_ contact: String) {
-        var clean = contact.trimmingCharacters(in: .whitespacesAndNewlines)
+        let clean = contact.trimmingCharacters(in: .whitespacesAndNewlines)
         var urlString = ""
 
         if clean.hasPrefix("@") {
@@ -246,10 +229,7 @@ struct ContentView: View {
         } else {
             let digits = clean.filter { $0.isNumber }
             if digits.hasPrefix("08") {
-                let wa = "62" + digits.dropFirst()
-                urlString = "https://wa.me/\(wa)"
-            } else if digits.hasPrefix("62") {
-                urlString = "https://wa.me/\(digits)"
+                urlString = "https://wa.me/62\(digits.dropFirst())"
             } else {
                 urlString = "https://wa.me/\(digits)"
             }
@@ -260,14 +240,9 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Hitung Live Sisa Garansi Mundur
     private func calculateRemaining(from now: Date, to exp: Date, durasi: Int) -> (text: String, color: Color) {
-        if durasi == 0 {
-            return ("⚪ Non-Garansi", .gray)
-        }
-        if now >= exp {
-            return ("🔴 Garansi Habis", .red)
-        }
+        if durasi == 0 { return ("⚪ Non-Garansi", .gray) }
+        if now >= exp { return ("🔴 Garansi Habis", .red) }
         let diff = Calendar.current.dateComponents([.day, .hour, .minute, .second], from: now, to: exp)
         let d = diff.day ?? 0
         let h = diff.hour ?? 0
@@ -285,9 +260,7 @@ struct ContentView: View {
     }
 
     private func formatUDID(_ u: String) -> String {
-        if u.count > 16 {
-            return "\(u.prefix(8))...\(u.suffix(6))"
-        }
+        if u.count > 16 { return "\(u.prefix(8))...\(u.suffix(6))" }
         return u
     }
 
@@ -311,7 +284,6 @@ struct ContentView: View {
     }
 }
 
-// MARK: - Modal Tambah Penjualan Baru
 struct AddSaleView: View {
     @Environment(\.dismiss) var dismiss
     var onSave: (SaleItem) -> Void
@@ -353,7 +325,7 @@ struct AddSaleView: View {
                     }
                 }
 
-                Section(header: Text("Perhitungan Finansial (Auto Untung)")) {
+                Section(header: Text("Perhitungan Finansial")) {
                     HStack {
                         Text("Modal")
                         Spacer()
@@ -369,7 +341,7 @@ struct AddSaleView: View {
                             .multilineTextAlignment(.trailing)
                     }
                     HStack {
-                        Text("Untung Bersih (Auto)")
+                        Text("Untung Bersih")
                             .fontWeight(.bold)
                         Spacer()
                         Text("Rp \(untungOtomatis)")
@@ -379,7 +351,7 @@ struct AddSaleView: View {
                 }
 
                 Section(header: Text("Catatan")) {
-                    TextField("Misal: Tipe iPhone 14 Pro", text: $catatan)
+                    TextField("Tipe Device / Keterangan", text: $catatan)
                 }
             }
             .navigationTitle("Catat Penjualan")
