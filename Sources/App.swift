@@ -1,7 +1,10 @@
 import SwiftUI
+import UIKit
+import Combine
 
+// MARK: - Model Data
 struct SaleItem: Identifiable, Codable {
-    var id = UUID()
+    var id: UUID = UUID()
     var tanggalDaftar: Date
     var kontakBuyer: String
     var udid: String
@@ -10,12 +13,21 @@ struct SaleItem: Identifiable, Codable {
     var durasiHari: Int
     var catatan: String
 
-    var untung: Int { hargaJual - modal }
+    var untung: Int {
+        hargaJual - modal
+    }
+
     var expiredDate: Date {
         Calendar.current.date(byAdding: .day, value: durasiHari, to: tanggalDaftar) ?? tanggalDaftar
     }
 }
 
+struct GaransiOption: Identifiable {
+    let id: Int
+    let name: String
+}
+
+// MARK: - Entry Point
 @main
 struct iBaalSalesApp: App {
     var body: some Scene {
@@ -26,7 +38,43 @@ struct iBaalSalesApp: App {
     }
 }
 
+// MARK: - Komponen Status Garansi
+struct StatusGaransiView: View {
+    let now: Date
+    let exp: Date
+    let durasi: Int
+
+    var status: (text: String, color: Color) {
+        if durasi == 0 {
+            return ("⚪ Non-Garansi", .gray)
+        }
+        if now >= exp {
+            return ("🔴 Garansi Habis", .red)
+        }
+        let diff = Calendar.current.dateComponents([.day, .hour, .minute, .second], from: now, to: exp)
+        let d = diff.day ?? 0
+        let h = diff.hour ?? 0
+        let m = diff.minute ?? 0
+        let s = diff.second ?? 0
+        return ("🟢 \(d)h \(h)j \(m)m \(s)d lagi", .green)
+    }
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Circle()
+                .fill(status.color)
+                .frame(width: 8, height: 8)
+            Text(status.text)
+                .font(.caption)
+                .fontWeight(.bold)
+                .foregroundColor(status.color)
+        }
+    }
+}
+
+// MARK: - Tampilan Utama
 struct ContentView: View {
+    @Environment(\.openURL) private var openURL
     @State private var items: [SaleItem] = []
     @State private var showAddModal = false
     @State private var timerNow = Date()
@@ -62,7 +110,7 @@ struct ContentView: View {
                                 Image(systemName: "tray.fill")
                                     .font(.system(size: 44))
                                     .foregroundColor(.gray.opacity(0.5))
-                                Text("Belum ada data penjualan.\nTekan tombol + di atas untuk mencatat.")
+                                Text("Belum ada data transaksi.\nTekan tombol + di atas untuk mencatat.")
                                     .font(.subheadline)
                                     .foregroundColor(.gray)
                                     .multilineTextAlignment(.center)
@@ -197,16 +245,7 @@ struct ContentView: View {
             Divider().background(Color.white.opacity(0.1))
 
             HStack {
-                let status = calculateRemaining(from: timerNow, to: item.expiredDate, durasi: item.durasiHari)
-                HStack(spacing: 5) {
-                    Circle()
-                        .fill(status.color)
-                        .frame(width: 8, height: 8)
-                    Text(status.text)
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .foregroundColor(status.color)
-                }
+                StatusGaransiView(now: timerNow, exp: item.expiredDate, durasi: item.durasiHari)
                 Spacer()
                 Text("Exp: \(formatDate(item.expiredDate))")
                     .font(.caption2)
@@ -230,25 +269,16 @@ struct ContentView: View {
             let digits = clean.filter { $0.isNumber }
             if digits.hasPrefix("08") {
                 urlString = "https://wa.me/62\(digits.dropFirst())"
+            } else if digits.hasPrefix("62") {
+                urlString = "https://wa.me/\(digits)"
             } else {
                 urlString = "https://wa.me/\(digits)"
             }
         }
 
         if let url = URL(string: urlString) {
-            UIApplication.shared.open(url)
+            openURL(url)
         }
-    }
-
-    private func calculateRemaining(from now: Date, to exp: Date, durasi: Int) -> (text: String, color: Color) {
-        if durasi == 0 { return ("⚪ Non-Garansi", .gray) }
-        if now >= exp { return ("🔴 Garansi Habis", .red) }
-        let diff = Calendar.current.dateComponents([.day, .hour, .minute, .second], from: now, to: exp)
-        let d = diff.day ?? 0
-        let h = diff.hour ?? 0
-        let m = diff.minute ?? 0
-        let s = diff.second ?? 0
-        return ("🟢 \(d)h \(h)j \(m)m \(s)d lagi", .green)
     }
 
     private func formatIDR(_ num: Int) -> String {
@@ -284,6 +314,7 @@ struct ContentView: View {
     }
 }
 
+// MARK: - Form Tambah Penjualan
 struct AddSaleView: View {
     @Environment(\.dismiss) var dismiss
     var onSave: (SaleItem) -> Void
@@ -301,12 +332,12 @@ struct AddSaleView: View {
         return jual - modal
     }
 
-    let opsiGaransi = [
-        ("1 Tahun (365 Hari)", 365),
-        ("6 Bulan (180 Hari)", 180),
-        ("3 Bulan (90 Hari)", 90),
-        ("1 Bulan (30 Hari)", 30),
-        ("Tanpa Garansi", 0)
+    let opsiGaransi: [GaransiOption] = [
+        GaransiOption(id: 365, name: "1 Tahun (365 Hari)"),
+        GaransiOption(id: 180, name: "6 Bulan (180 Hari)"),
+        GaransiOption(id: 90, name: "3 Bulan (90 Hari)"),
+        GaransiOption(id: 30, name: "1 Bulan (30 Hari)"),
+        GaransiOption(id: 0, name: "Tanpa Garansi")
     ]
 
     var body: some View {
@@ -319,8 +350,8 @@ struct AddSaleView: View {
 
                 Section(header: Text("Paket Garansi")) {
                     Picker("Pilih Durasi", selection: $selectedGaransi) {
-                        ForEach(opsiGaransi, id: \.1) { item in
-                            Text(item.0).tag(item.1)
+                        ForEach(opsiGaransi) { item in
+                            Text(item.name).tag(item.id)
                         }
                     }
                 }
