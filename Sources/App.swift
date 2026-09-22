@@ -290,7 +290,6 @@ struct ContentView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                // Background Gelap dengan Ambient Glowing Orbs khas Liquid Glass
                 Color.black.ignoresSafeArea()
 
                 Circle()
@@ -386,7 +385,7 @@ struct ContentView: View {
                     } label: {
                         Image(systemName: hideFinancials ? "eye.slash.fill" : "eye.fill")
                             .font(.system(size: 18))
-                            .foregroundColor(hideFinancials ? .orange : .white.opacity(0.8))
+                            .foregroundColor(.cyan)
                     }
 
                     Button {
@@ -448,25 +447,15 @@ struct ContentView: View {
 
                 Spacer()
 
-                if hideFinancials {
-                    Text("Sensor Aktif (Mode SS)")
-                        .font(.caption2)
-                        .bold()
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(Color.orange.opacity(0.2))
-                        .cornerRadius(6)
-                        .foregroundColor(.orange)
-                } else {
-                    Text("Live Monitor")
-                        .font(.caption2)
-                        .bold()
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(Color.green.opacity(0.2))
-                        .cornerRadius(6)
-                        .foregroundColor(.green)
-                }
+                // Selalu tampil sebagai Live Monitor natural tanpa membocorkan mode sensor
+                Text("Live Monitor")
+                    .font(.caption2)
+                    .bold()
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Color.green.opacity(0.2))
+                    .cornerRadius(6)
+                    .foregroundColor(.green)
             }
 
             Text(hideFinancials ? "Rp ••••••••" : formatIDR(totalUntung))
@@ -574,7 +563,7 @@ struct ContentView: View {
                         } label: {
                             HStack(spacing: 4) {
                                 Image(systemName: "key.fill")
-                                Text("Pass: \(pass)")
+                                Text("Pass: \(hideFinancials ? "••••" : pass)")
                             }
                             .font(.system(size: 11, weight: .semibold))
                             .padding(.horizontal, 8)
@@ -592,6 +581,7 @@ struct ContentView: View {
                 }
             }
 
+            // Tampilan UDID (Otomatis disensor jika Mode Mata Aktif)
             VStack(alignment: .leading, spacing: 5) {
                 HStack {
                     Text("UDID:")
@@ -606,10 +596,10 @@ struct ContentView: View {
                             .foregroundColor(.cyan)
                     }
                 }
-                Text(item.udid)
+                Text(hideFinancials ? maskUDID(item.udid) : item.udid)
                     .font(.system(size: 12, weight: .medium, design: .monospaced))
                     .foregroundColor(.white.opacity(0.95))
-                    .textSelection(.enabled)
+                    .textSelection(hideFinancials ? .disabled : .enabled)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(10)
@@ -648,6 +638,16 @@ struct ContentView: View {
         .padding(16)
         .liquidGlass(cornerRadius: 18)
         .padding(.horizontal)
+    }
+
+    // Helper Sensor UDID
+    private func maskUDID(_ u: String) -> String {
+        let clean = u.trimmingCharacters(in: .whitespacesAndNewlines)
+        if clean.count >= 12 {
+            let prefix = clean.prefix(8)
+            return "\(prefix)-••••••••••••••••"
+        }
+        return "••••••••••••••••"
     }
 
     private func shareCertZip(item: SaleItem) {
