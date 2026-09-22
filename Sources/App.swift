@@ -173,6 +173,14 @@ enum FilterGaransi: String, CaseIterable, Identifiable {
     case aktif = "Aktif"
     case habis = "Habis"
     var id: String { self.rawValue }
+
+    var icon: String {
+        switch self {
+        case .semua: return "tray.full.fill"
+        case .aktif: return "sparkles"
+        case .habis: return "clock.badge.xmark.fill"
+        }
+    }
 }
 
 struct GaransiOption: Identifiable {
@@ -196,17 +204,17 @@ extension View {
             .background(
                 ZStack {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(Color.black.opacity(0.35))
+                        .fill(Color.black.opacity(0.38))
 
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .fill(.ultraThinMaterial)
 
-                    // Efek Pantulan Cahaya Atas Kaca (Specular Highlight)
+                    // Pantulan Cahaya Atas Kaca (Specular Highlight)
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .fill(
                             LinearGradient(
                                 colors: [
-                                    Color.white.opacity(0.12),
+                                    Color.white.opacity(0.14),
                                     Color.white.opacity(0.02),
                                     Color.clear
                                 ],
@@ -222,9 +230,9 @@ extension View {
                     .stroke(
                         LinearGradient(
                             stops: [
-                                .init(color: Color.white.opacity(0.45), location: 0.0),
-                                .init(color: Color.white.opacity(0.10), location: 0.4),
-                                .init(color: Color.cyan.opacity(0.25), location: 1.0)
+                                .init(color: Color.white.opacity(0.50), location: 0.0),
+                                .init(color: Color.white.opacity(0.12), location: 0.45),
+                                .init(color: Color.cyan.opacity(0.30), location: 1.0)
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -232,7 +240,7 @@ extension View {
                         lineWidth: 1
                     )
             )
-            .shadow(color: Color.black.opacity(0.4), radius: 18, x: 0, y: 10)
+            .shadow(color: Color.black.opacity(0.45), radius: 16, x: 0, y: 8)
     }
 }
 
@@ -293,59 +301,231 @@ struct StatusGaransiView: View {
     }
 }
 
-// MARK: - Custom Liquid Glass Segmented Capsule Switch
-struct LiquidGlassSegmentedSwitch: View {
+// MARK: - Switch Gelembung Prisma Kaca Cair (Liquid Lens Prism Switch)
+struct LiquidPrismSwitch: View {
     @Binding var selected: FilterGaransi
-    @Namespace private var filterAnimation
+    @Namespace private var lensAnimation
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 8) {
             ForEach(FilterGaransi.allCases) { filter in
                 let isSelected = (selected == filter)
+
                 Button {
-                    withAnimation(.spring(response: 0.32, dampingFraction: 0.78)) {
+                    withAnimation(.spring(response: 0.38, dampingFraction: 0.72)) {
                         selected = filter
                     }
                 } label: {
-                    Text(filter.rawValue)
-                        .font(.system(size: 13, weight: isSelected ? .bold : .medium))
-                        .foregroundColor(isSelected ? .white : .white.opacity(0.55))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .background(
-                            ZStack {
-                                if isSelected {
-                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .fill(Color.cyan.opacity(0.28))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                                .stroke(Color.white.opacity(0.35), lineWidth: 1)
+                    VStack(spacing: 4) {
+                        Image(systemName: filter.icon)
+                            .font(.system(size: 16, weight: .semibold))
+
+                        Text(filter.rawValue)
+                            .font(.system(size: 11, weight: isSelected ? .heavy : .medium))
+                    }
+                    .foregroundColor(isSelected ? .white : .white.opacity(0.45))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(
+                        ZStack {
+                            if isSelected {
+                                // Lensa Kaca Cair dengan Pembiasan Pelangi (Chromatic Aberration)
+                                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                    .fill(.ultraThinMaterial)
+
+                                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                    .fill(Color.white.opacity(0.10))
+
+                                // Pantulan Cahaya Atas
+                                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [Color.white.opacity(0.35), Color.clear],
+                                            startPoint: .top,
+                                            endPoint: .bottom
                                         )
-                                        .shadow(color: Color.cyan.opacity(0.4), radius: 8, y: 2)
-                                        .matchedGeometryEffect(id: "GLASS_CAPSULE", in: filterAnimation)
-                                }
+                                    )
+
+                                // Cincin Spektrum Pelangi Prisma (UnderDock Style)
+                                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                    .stroke(
+                                        AngularGradient(
+                                            gradient: Gradient(colors: [
+                                                Color.cyan,
+                                                Color.blue,
+                                                Color.purple,
+                                                Color.pink,
+                                                Color.orange,
+                                                Color.yellow,
+                                                Color.green,
+                                                Color.cyan
+                                            ]),
+                                            center: .center
+                                        ),
+                                        lineWidth: 1.6
+                                    )
+                                    .blur(radius: 0.4)
+
+                                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                    .stroke(Color.white.opacity(0.6), lineWidth: 0.6)
+
+                                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                    .matchedGeometryEffect(id: "LIQUID_PRISM_ORB", in: lensAnimation)
                             }
-                        )
+                        }
+                    )
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(4)
-        .background(Color.black.opacity(0.45))
+        .padding(6)
+        .background(Color.black.opacity(0.55))
         .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .stroke(
                     LinearGradient(
-                        colors: [Color.white.opacity(0.3), Color.white.opacity(0.05), Color.cyan.opacity(0.18)],
+                        colors: [Color.white.opacity(0.35), Color.white.opacity(0.06), Color.cyan.opacity(0.20)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
                     lineWidth: 1
                 )
         )
+        .shadow(color: Color.black.opacity(0.5), radius: 20, y: 10)
         .padding(.horizontal)
+    }
+}
+
+// MARK: - Floating Glass Circle Action Dock (Tombol Kaca Bulat Melayang di Bawah)
+struct FloatingGlassActionDock: View {
+    var completedBatchesCount: Int
+    var hideFinancials: Bool
+    var onAdd: () -> Void
+    var onHistory: () -> Void
+    var onEditModal: () -> Void
+    var onTogglePrivacy: () -> Void
+    var onMore: () -> Void
+
+    var body: some View {
+        HStack(spacing: 16) {
+            // 1. Tombol Privasi Mata (Sensor)
+            glassCircleButton(
+                icon: hideFinancials ? "eye.slash.fill" : "eye.fill",
+                color: hideFinancials ? .orange : .cyan,
+                action: onTogglePrivacy
+            )
+
+            // 2. Tombol Edit Modal Kloter
+            glassCircleButton(
+                icon: "dollarsign.circle.fill",
+                color: .cyan,
+                action: onEditModal
+            )
+
+            // 3. Tombol UTAMA: Tambah Transaksi (Gelembung Kaca Besar)
+            Button(action: onAdd) {
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.cyan.opacity(0.85), Color.blue.opacity(0.75)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 58, height: 58)
+
+                    Circle()
+                        .stroke(
+                            AngularGradient(
+                                gradient: Gradient(colors: [.white, .cyan, .purple, .pink, .yellow, .white]),
+                                center: .center
+                            ),
+                            lineWidth: 2
+                        )
+                        .blur(radius: 0.3)
+
+                    Image(systemName: "plus")
+                        .font(.system(size: 24, weight: .heavy))
+                        .foregroundColor(.white)
+                }
+                .shadow(color: Color.cyan.opacity(0.55), radius: 14, y: 4)
+            }
+            .buttonStyle(.plain)
+
+            // 4. Tombol Arsip Kloter Selesai
+            ZStack(alignment: .topTrailing) {
+                glassCircleButton(
+                    icon: "archivebox.fill",
+                    color: completedBatchesCount > 0 ? .green : .white.opacity(0.5),
+                    action: onHistory
+                )
+
+                if completedBatchesCount > 0 {
+                    Text("\(completedBatchesCount)")
+                        .font(.system(size: 10, weight: .heavy))
+                        .foregroundColor(.white)
+                        .padding(5)
+                        .background(Color.red)
+                        .clipShape(Circle())
+                        .offset(x: 4, y: -4)
+                }
+            }
+
+            // 5. Tombol Menu Cadangan (Backup / Restore)
+            glassCircleButton(
+                icon: "ellipsis.circle.fill",
+                color: .white.opacity(0.85),
+                action: onMore
+            )
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .background(Color.black.opacity(0.65))
+        .background(.ultraThinMaterial)
+        .clipShape(Capsule(style: .continuous))
+        .overlay(
+            Capsule(style: .continuous)
+                .stroke(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.4), Color.white.opacity(0.08), Color.cyan.opacity(0.25)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1.2
+                )
+        )
+        .shadow(color: Color.black.opacity(0.6), radius: 24, y: 12)
+    }
+
+    private func glassCircleButton(icon: String, color: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            ZStack {
+                Circle()
+                    .fill(Color.white.opacity(0.08))
+                    .frame(width: 44, height: 44)
+
+                Circle()
+                    .fill(.ultraThinMaterial)
+
+                Circle()
+                    .stroke(
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.55), Color.white.opacity(0.12)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
+                    )
+
+                Image(systemName: icon)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(color)
+            }
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -356,6 +536,7 @@ struct ContentView: View {
     @State private var showAddModal = false
     @State private var showHistoryModal = false
     @State private var showEditBatchModal = false
+    @State private var showMoreMenuSheet = false
     @State private var itemToEdit: SaleItem? = nil
     @State private var timerNow = Date()
 
@@ -446,57 +627,34 @@ struct ContentView: View {
 
     var body: some View {
         NavigationView {
-            ZStack {
+            ZStack(alignment: .bottom) {
                 Color.black.ignoresSafeArea()
 
+                // Ambient Neon Glow
                 Circle()
-                    .fill(Color.cyan.opacity(0.30))
+                    .fill(Color.cyan.opacity(0.32))
                     .frame(width: 320, height: 320)
-                    .blur(radius: 90)
-                    .offset(x: -120, y: -240)
+                    .blur(radius: 95)
+                    .offset(x: -120, y: -260)
 
                 Circle()
-                    .fill(Color.purple.opacity(0.24))
-                    .frame(width: 290, height: 290)
-                    .blur(radius: 100)
+                    .fill(Color.purple.opacity(0.25))
+                    .frame(width: 300, height: 300)
+                    .blur(radius: 105)
                     .offset(x: 140, y: -20)
 
                 Circle()
                     .fill(Color.blue.opacity(0.20))
-                    .frame(width: 260, height: 260)
-                    .blur(radius: 85)
+                    .frame(width: 270, height: 270)
+                    .blur(radius: 90)
                     .offset(x: -70, y: 340)
 
                 ScrollView {
                     VStack(spacing: 18) {
                         summaryDashboardView
 
-                        if completedBatchesCount > 0 {
-                            Button {
-                                showHistoryModal = true
-                            } label: {
-                                HStack(spacing: 8) {
-                                    Image(systemName: "archivebox.fill")
-                                        .foregroundColor(.green)
-                                    Text("\(completedBatchesCount) Kloter Selesai Tersimpan")
-                                        .font(.subheadline)
-                                        .bold()
-                                        .foregroundColor(.white)
-                                    Spacer()
-                                    Text("Buka Arsip ➔")
-                                        .font(.caption)
-                                        .bold()
-                                        .foregroundColor(.green)
-                                }
-                                .padding(14)
-                                .liquidGlass(cornerRadius: 16)
-                            }
-                            .buttonStyle(.plain)
-                            .padding(.horizontal)
-                        }
-
-                        // Kapsul Switch Liquid Glass
-                        LiquidGlassSegmentedSwitch(selected: $selectedFilter)
+                        // Switch Gelembung Lensa Cair Prisma (UnderDock)
+                        LiquidPrismSwitch(selected: $selectedFilter)
 
                         HStack {
                             Text("DAFTAR PEMBELI")
@@ -514,7 +672,7 @@ struct ContentView: View {
                                 Image(systemName: "magnifyingglass")
                                     .font(.system(size: 40))
                                     .foregroundColor(.white.opacity(0.3))
-                                Text(items.isEmpty ? "Belum ada transaksi.\nTekan + untuk menambah." : "Tidak ditemukan transaksi yang cocok.")
+                                Text(items.isEmpty ? "Belum ada transaksi.\nTekan tombol + di bawah." : "Tidak ditemukan transaksi yang cocok.")
                                     .font(.subheadline)
                                     .foregroundColor(.gray)
                                     .multilineTextAlignment(.center)
@@ -538,62 +696,40 @@ struct ContentView: View {
                                 }
                             }
                         }
+
+                        // Ruang kosong di bawah agar tidak tertutup floating dock
+                        Spacer().frame(height: 90)
                     }
                     .padding(.vertical)
                 }
+
+                // MARK: - Floating Glass Circle Action Dock
+                FloatingGlassActionDock(
+                    completedBatchesCount: completedBatchesCount,
+                    hideFinancials: hideFinancials,
+                    onAdd: { showAddModal = true },
+                    onHistory: { showHistoryModal = true },
+                    onEditModal: { showEditBatchModal = true },
+                    onTogglePrivacy: {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                            hideFinancials.toggle()
+                        }
+                    },
+                    onMore: { showMoreMenuSheet = true }
+                )
+                .padding(.bottom, 12)
             }
             .navigationTitle("Cert Manager ⚡")
             .searchable(text: $searchText, prompt: "Cari nama, UDID, tipe HP...")
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Menu {
-                        Button {
-                            showHistoryModal = true
-                        } label: {
-                            Label("Arsip Kloter Selesai", systemImage: "archivebox.fill")
-                        }
-                        Button {
-                            showEditBatchModal = true
-                        } label: {
-                            Label("Ubah Modal Kloter #\(activeBatchNumber)", systemImage: "dollarsign.circle.fill")
-                        }
-                        Divider()
-                        Button {
-                            exportBackup()
-                        } label: {
-                            Label("Cadangkan Data (Backup)", systemImage: "square.and.arrow.up")
-                        }
-                        Button {
-                            showFileImporter = true
-                        } label: {
-                            Label("Pulihkan Data (Restore)", systemImage: "square.and.arrow.down")
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis.circle.fill")
-                            .font(.system(size: 20))
-                            .foregroundColor(.white.opacity(0.85))
-                    }
-                }
-
-                ToolbarItemGroup(placement: .navigationBarTrailing) {
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            hideFinancials.toggle()
-                        }
-                    } label: {
-                        Image(systemName: hideFinancials ? "eye.slash.fill" : "eye.fill")
-                            .font(.system(size: 18))
-                            .foregroundColor(.cyan)
-                    }
-
-                    Button {
-                        showAddModal = true
-                    } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 22))
-                            .foregroundColor(.cyan)
-                    }
-                }
+            .actionSheet(isPresented: $showMoreMenuSheet) {
+                ActionSheet(
+                    title: Text("Pilihan Cadangan Data"),
+                    buttons: [
+                        .default(Text("Cadangkan Data (Backup)")) { exportBackup() },
+                        .default(Text("Pulihkan Data (Restore)")) { showFileImporter = true },
+                        .cancel()
+                    ]
+                )
             }
             .sheet(isPresented: $showAddModal) {
                 SaleFormSheet(
