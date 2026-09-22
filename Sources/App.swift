@@ -2,10 +2,11 @@ import SwiftUI
 import UIKit
 import Combine
 
-// MARK: - Model Data
+// MARK: - Model Data Penjualan
 struct SaleItem: Identifiable, Codable {
     var id: UUID = UUID()
     var tanggalDaftar: Date
+    var namaBuyer: String
     var kontakBuyer: String
     var udid: String
     var modal: Int
@@ -19,6 +20,37 @@ struct SaleItem: Identifiable, Codable {
 
     var expiredDate: Date {
         Calendar.current.date(byAdding: .day, value: durasiHari, to: tanggalDaftar) ?? tanggalDaftar
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, tanggalDaftar, namaBuyer, kontakBuyer, udid, modal, hargaJual, durasiHari, catatan
+    }
+
+    init(id: UUID = UUID(), tanggalDaftar: Date, namaBuyer: String, kontakBuyer: String, udid: String, modal: Int, hargaJual: Int, durasiHari: Int, catatan: String) {
+        self.id = id
+        self.tanggalDaftar = tanggalDaftar
+        self.namaBuyer = namaBuyer
+        self.kontakBuyer = kontakBuyer
+        self.udid = udid
+        self.modal = modal
+        self.hargaJual = hargaJual
+        self.durasiHari = durasiHari
+        self.catatan = catatan
+    }
+
+    // Kompatibilitas mundur agar data tersimpan sebelumnya tidak korup
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        tanggalDaftar = try container.decodeIfPresent(Date.self, forKey: .tanggalDaftar) ?? Date()
+        let kontak = try container.decodeIfPresent(String.self, forKey: .kontakBuyer) ?? ""
+        kontakBuyer = kontak
+        namaBuyer = try container.decodeIfPresent(String.self, forKey: .namaBuyer) ?? (kontak.isEmpty ? "Buyer" : kontak)
+        udid = try container.decodeIfPresent(String.self, forKey: .udid) ?? "-"
+        modal = try container.decodeIfPresent(Int.self, forKey: .modal) ?? 0
+        hargaJual = try container.decodeIfPresent(Int.self, forKey: .hargaJual) ?? 0
+        durasiHari = try container.decodeIfPresent(Int.self, forKey: .durasiHari) ?? 365
+        catatan = try container.decodeIfPresent(String.self, forKey: .catatan) ?? ""
     }
 }
 
@@ -77,6 +109,7 @@ struct ContentView: View {
     @Environment(\.openURL) private var openURL
     @State private var items: [SaleItem] = []
     @State private var showAddModal = false
+    @State private var itemToEdit: SaleItem? = nil
     @State private var timerNow = Date()
 
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -137,9 +170,22 @@ struct ContentView: View {
                     }
                 }
             }
+            // Sheet Tambah Data Baru
             .sheet(isPresented: $showAddModal) {
-                AddSaleView { newItem in
+                SaleFormSheet { newItem in
                     items.insert(newItem, at: 0)
+                    saveData()
+                }
+            }
+            // Sheet Edit / Hapus Data
+            .sheet(item: $itemToEdit) { currentItem in
+                SaleFormSheet(itemToEdit: currentItem) { updatedItem in
+                    if let idx = items.firstIndex(where: { $0.id == updatedItem.id }) {
+                        items[idx] = updatedItem
+                        saveData()
+                    }
+                } onDelete: { deletedId in
+                    items.removeAll { $0.id == deletedId }
                     saveData()
                 }
             }
@@ -201,43 +247,78 @@ struct ContentView: View {
 
     private func buyerCard(item: SaleItem) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
+            HStack(alignment: .center) {
+                // Tombol Nama Buyer: Diklik langsung menuju WhatsApp atau Telegram
                 Button {
                     openChatLink(item.kontakBuyer)
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: item.kontakBuyer.contains("@") ? "paperplane.fill" : "phone.bubble.left.fill")
-                        Text(item.kontakBuyer)
-                            .bold()
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(item.namaBuyer.isEmpty ? "Tanpa Nama" : item.namaBuyer)
+                                .bold()
+                                .foregroundColor(.cyan)
+                            if !item.kontakBuyer.isEmpty {
+                                Text(item.kontakBuyer)
+                                    .font(.caption2)
+                                    .foregroundColor(.cyan.opacity(0.75))
+                            }
+                        }
                     }
-                    .font(.subheadline)
-                    .foregroundColor(.cyan)
                     .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
+                    .padding(.vertical, 6)
                     .background(Color.cyan.opacity(0.15))
                     .cornerRadius(8)
                 }
 
                 Spacer()
 
-                Text("+\(formatIDR(item.untung))")
-                    .font(.footnote)
-                    .bold()
-                    .foregroundColor(.green)
+                // Untung Bersih & Tombol Edit (Pensil)
+                HStack(spacing: 12) {
+                    Text("+\(formatIDR(item.untung))")
+                        .font(.footnote)
+                        .bold()
+                        .foregroundColor(.green)
+
+                    Button {
+                        itemToEdit = item
+                    } label: {
+                        Image(systemName: "pencil.circle.fill")
+                            .font(.system(size: 22))
+                            .foregroundColor(.gray.opacity(0.9))
+                    }
+                }
             }
 
-            HStack {
-                Text("UDID: \(formatUDID(item.udid))")
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(.gray)
-                Spacer()
-                Button {
-                    UIPasteboard.general.string = item.udid
-                } label: {
-                    Label("Salin", systemImage: "doc.on.doc")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.8))
+            // Tampilan Nomor UDID Lengkap
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text("UDID:")
+                        .font(.caption2)
+                        .foregroundColor(.gray)
+                    Spacer()
+                    Button {
+                        UIPasteboard.general.string = item.udid
+                    } label: {
+                        Label("Salin", systemImage: "doc.on.doc")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(.cyan)
+                    }
                 }
+                Text(item.udid)
+                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.9))
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(8)
+            .background(Color.black.opacity(0.25))
+            .cornerRadius(8)
+
+            if !item.catatan.isEmpty && item.catatan != "-" {
+                Text("📝 \(item.catatan)")
+                    .font(.caption2)
+                    .foregroundColor(.gray)
             }
 
             Divider().background(Color.white.opacity(0.1))
@@ -245,7 +326,7 @@ struct ContentView: View {
             HStack {
                 StatusGaransiView(now: timerNow, exp: item.expiredDate, durasi: item.durasiHari)
                 Spacer()
-                Text("Exp: \(formatDate(item.expiredDate))")
+                Text("Daftar: \(formatDate(item.tanggalDaftar))")
                     .font(.caption2)
                     .foregroundColor(.gray)
             }
@@ -287,11 +368,6 @@ struct ContentView: View {
         return formatter.string(from: NSNumber(value: num)) ?? "Rp 0"
     }
 
-    private func formatUDID(_ u: String) -> String {
-        if u.count > 16 { return "\(u.prefix(8))...\(u.suffix(6))" }
-        return u
-    }
-
     private func formatDate(_ d: Date) -> String {
         let f = DateFormatter()
         f.dateFormat = "dd/MM/yyyy"
@@ -312,12 +388,17 @@ struct ContentView: View {
     }
 }
 
-// MARK: - Form Tambah Penjualan
-struct AddSaleView: View {
+// MARK: - Formulir Tambah / Edit Penjualan
+struct SaleFormSheet: View {
     @Environment(\.dismiss) var dismiss
-    var onSave: (SaleItem) -> Void
 
+    var itemToEdit: SaleItem? = nil
+    var onSave: (SaleItem) -> Void
+    var onDelete: ((UUID) -> Void)? = nil
+
+    @State private var namaBuyer = ""
     @State private var kontakBuyer = ""
+    @State private var tanggalDaftar = Date()
     @State private var udid = ""
     @State private var modalText = "75000"
     @State private var hargaJualText = "150000"
@@ -342,16 +423,25 @@ struct AddSaleView: View {
         NavigationView {
             Form {
                 Section(header: Text("Informasi Pembeli")) {
-                    TextField("Kontak (@tele atau 08xxx WA)", text: $kontakBuyer)
-                    TextField("Nomor UDID", text: $udid)
+                    TextField("Nama Buyer (misal: Budi)", text: $namaBuyer)
+                    TextField("Nomor WA (08xxx) atau Telegram (@username)", text: $kontakBuyer)
+                        .keyboardType(.emailAddress)
+                        .autocapitalization(.none)
                 }
 
-                Section(header: Text("Paket Garansi")) {
-                    Picker("Pilih Durasi", selection: $selectedGaransi) {
+                Section(header: Text("Waktu Transaksi & Garansi")) {
+                    DatePicker("Tanggal Masuk", selection: $tanggalDaftar, displayedComponents: [.date, .hourAndMinute])
+                    Picker("Paket Garansi", selection: $selectedGaransi) {
                         ForEach(opsiGaransi) { item in
                             Text(item.name).tag(item.id)
                         }
                     }
+                }
+
+                Section(header: Text("Nomor UDID")) {
+                    TextEditor(text: $udid)
+                        .frame(minHeight: 60)
+                        .font(.system(size: 13, design: .monospaced))
                 }
 
                 Section(header: Text("Perhitungan Finansial")) {
@@ -380,32 +470,65 @@ struct AddSaleView: View {
                 }
 
                 Section(header: Text("Catatan")) {
-                    TextField("Tipe Device / Keterangan", text: $catatan)
+                    TextField("Misal: iPhone 14 Pro Max 256GB", text: $catatan)
+                }
+
+                if itemToEdit != nil {
+                    Section {
+                        Button(role: .destructive) {
+                            if let id = itemToEdit?.id {
+                                onDelete?(id)
+                            }
+                            dismiss()
+                        } label: {
+                            HStack {
+                                Spacer()
+                                Text("Hapus Transaksi Ini")
+                                    .bold()
+                                    .foregroundColor(.red)
+                                Spacer()
+                            }
+                        }
+                    }
                 }
             }
-            .navigationTitle("Catat Penjualan")
+            .navigationTitle(itemToEdit == nil ? "Tambah Penjualan" : "Edit Penjualan")
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Batal") { dismiss() }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
-                        let item = SaleItem(
-                            tanggalDaftar: Date(),
-                            kontakBuyer: kontakBuyer.isEmpty ? "@buyer" : kontakBuyer,
-                            udid: udid.isEmpty ? "-" : udid,
+                        let finalItem = SaleItem(
+                            id: itemToEdit?.id ?? UUID(),
+                            tanggalDaftar: tanggalDaftar,
+                            namaBuyer: namaBuyer.isEmpty ? (kontakBuyer.isEmpty ? "Buyer" : kontakBuyer) : namaBuyer,
+                            kontakBuyer: kontakBuyer,
+                            udid: udid.trimmingCharacters(in: .whitespacesAndNewlines),
                             modal: Int(modalText) ?? 0,
                             hargaJual: Int(hargaJualText) ?? 0,
                             durasiHari: selectedGaransi,
                             catatan: catatan
                         )
-                        onSave(item)
+                        onSave(finalItem)
                         dismiss()
                     } label: {
                         Text("Simpan")
                             .bold()
                             .foregroundColor(.cyan)
                     }
+                }
+            }
+            .onAppear {
+                if let item = itemToEdit {
+                    namaBuyer = item.namaBuyer
+                    kontakBuyer = item.kontakBuyer
+                    tanggalDaftar = item.tanggalDaftar
+                    udid = item.udid
+                    modalText = String(item.modal)
+                    hargaJualText = String(item.hargaJual)
+                    selectedGaransi = item.durasiHari
+                    catatan = item.catatan
                 }
             }
         }
