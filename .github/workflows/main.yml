@@ -2,6 +2,9 @@ name: Build iBaalSales IPA
 
 on:
   push:
+    branches:
+      - main
+      - master
   workflow_dispatch:
 
 jobs:
@@ -12,6 +15,15 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
+
+      - name: Aktifkan Xcode 16
+        run: |
+          XCODE_PATH=$(ls -d /Applications/Xcode_16*.app 2>/dev/null | tail -n 1)
+          if [ -n "$XCODE_PATH" ]; then
+            echo "Menggunakan: $XCODE_PATH"
+            sudo xcode-select -s "$XCODE_PATH"
+          fi
+          xcodebuild -version
 
       - name: Install XcodeGen
         run: brew install xcodegen
