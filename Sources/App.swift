@@ -58,7 +58,6 @@ struct SaleItem: Identifiable, Codable {
     var durasiHari: Int
     var catatan: String
 
-    // Berkas ZIP Sertifikat (Opsional)
     var zipFileName: String? = nil
     var certPassword: String? = nil
 
@@ -491,7 +490,7 @@ struct ContentView: View {
                 }
             }
 
-            // Tampilan Tombol Kirim ZIP Cert (Jika Tersedia)
+            // Tombol Kirim ZIP Cert (Nama file terformat rapi saat dikirim)
             if item.hasCertZip || (item.certPassword != nil && !item.certPassword!.isEmpty) {
                 HStack(spacing: 8) {
                     if item.hasCertZip {
@@ -585,9 +584,31 @@ struct ContentView: View {
         .padding(.horizontal)
     }
 
+    // Fungsi Pengiriman ZIP dengan Nama Khusus (password - ibaalcert.zip)
     private func shareCertZip(item: SaleItem) {
-        if let zipName = item.zipFileName, let url = CertStorageManager.shared.getFileURL(fileName: zipName) {
-            shareItems = [url]
+        guard let zipName = item.zipFileName,
+              let originalURL = CertStorageManager.shared.getFileURL(fileName: zipName) else {
+            return
+        }
+
+        // Ambil password: pakai inputan khusus atau default 'ibaalcert'
+        let pass = (item.certPassword?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false)
+            ? item.certPassword!.trimmingCharacters(in: .whitespacesAndNewlines)
+            : "ibaalcert"
+
+        // Nama file otomatis rapi saat dikirim ke customer
+        let customFileName = "password - \(pass).zip"
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(customFileName)
+
+        do {
+            if FileManager.default.fileExists(atPath: tempURL.path) {
+                try FileManager.default.removeItem(at: tempURL)
+            }
+            try FileManager.default.copyItem(at: originalURL, to: tempURL)
+            shareItems = [tempURL]
+            showShareSheet = true
+        } catch {
+            shareItems = [originalURL]
             showShareSheet = true
         }
     }
@@ -690,7 +711,7 @@ struct ContentView: View {
     }
 }
 
-// MARK: - Formulir Tambah / Edit Penjualan dengan Upload ZIP Responsif
+// MARK: - Formulir Tambah / Edit Penjualan
 struct SaleFormSheet: View {
     @Environment(\.dismiss) var dismiss
 
@@ -709,7 +730,6 @@ struct SaleFormSheet: View {
     @State private var selectedGaransi = 365
     @State private var catatan = ""
 
-    // State Berkas ZIP Sertifikat (Opsional)
     @State private var zipFileName: String? = nil
     @State private var certPassword = ""
     @State private var showZipPicker = false
@@ -742,8 +762,7 @@ struct SaleFormSheet: View {
                         .autocapitalization(.none)
                 }
 
-                // MARK: - Upload ZIP Cert (Opsional)
-                Section(header: Text("File ZIP Sertifikat (Opsional)"), footer: Text("Simpan file .zip (isi .p12 + .mobileprovision) agar mudah dikirim ulang sewaktu-waktu.")) {
+                Section(header: Text("File ZIP Sertifikat (Opsional)"), footer: Text("Saat dibagikan, file akan otomatis diberi nama 'password - [password].zip'")) {
                     if let name = zipFileName {
                         HStack {
                             Image(systemName: "doc.zipper")
@@ -780,11 +799,10 @@ struct SaleFormSheet: View {
                         .buttonStyle(.borderless)
                     }
 
-                    // Password Cert (Opsional)
                     HStack {
                         Image(systemName: "key.fill")
                             .foregroundColor(.yellow)
-                        TextField("Password Cert (misal: 1)", text: $certPassword)
+                        TextField("Password Cert (default: ibaalcert)", text: $certPassword)
                             .autocapitalization(.none)
                     }
                 }
@@ -867,7 +885,6 @@ struct SaleFormSheet: View {
                     }
                 }
             }
-            // File Importer Khusus File .ZIP & Arsip (Bisa Dipilih Lancar)
             .fileImporter(isPresented: $showZipPicker, allowedContentTypes: [.zip, .archive, .data]) { result in
                 if let url = try? result.get() {
                     zipFileName = CertStorageManager.shared.saveZip(from: url, for: itemId)
