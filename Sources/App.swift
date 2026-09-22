@@ -283,7 +283,7 @@ struct ContentView: View {
 
     @AppStorage("hideFinancials") private var hideFinancials: Bool = false
 
-    // State untuk Mengontrol Kloter Mana yang Terbuka (Expanded)
+    // State Pengontrol Kloter yang Terbuka
     @State private var expandedBatches: Set<Int> = []
 
     @State private var searchText = ""
@@ -352,7 +352,6 @@ struct ContentView: View {
         }
     }
 
-    // Daftar Kloter Unik yang Ada di Hasil Filter (Kloter Terbaru di Atas)
     var batchesInFiltered: [Int] {
         let unique = Set(filteredItems.map { $0.batchNumber })
         return unique.sorted(by: >)
@@ -363,7 +362,6 @@ struct ContentView: View {
     }
 
     func isBatchExpanded(_ batch: Int) -> Bool {
-        // Jika sedang mencari, otomatis buka semua kloter yang cocok
         if !searchText.trimmingCharacters(in: .whitespaces).isEmpty {
             return true
         }
@@ -458,7 +456,7 @@ struct ContentView: View {
                             }
                             .padding(.top, 40)
                         } else {
-                            // Tampilan Akordeon Collapsible per Kloter
+                            // Tampilan Akordeon Collapsible Halus (Bebas Glitch)
                             ForEach(batchesInFiltered, id: \.self) { batch in
                                 let batchSales = itemsInBatch(batch)
                                 VStack(spacing: 10) {
@@ -470,7 +468,8 @@ struct ContentView: View {
                                                 buyerCard(item: item)
                                             }
                                         }
-                                        .transition(.opacity.combined(with: .move(edge: .top)))
+                                        .clipped()
+                                        .transition(.opacity)
                                     }
                                 }
                             }
@@ -540,7 +539,9 @@ struct ContentView: View {
                     onSave: { newItem in
                         items.insert(newItem, at: 0)
                         recalculateAndSave()
-                        expandedBatches.insert(activeBatchNumber)
+                        withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+                            expandedBatches.insert(activeBatchNumber)
+                        }
                     }
                 )
             }
@@ -592,7 +593,6 @@ struct ContentView: View {
             }
             .onAppear {
                 loadData()
-                // Otomatis buka kloter aktif saat pertama kali dibuka
                 if expandedBatches.isEmpty {
                     expandedBatches.insert(activeBatchNumber)
                 }
@@ -603,13 +603,13 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Header Akordeon Kloter (Collapsible Bar)
+    // MARK: - Header Akordeon Kloter (Smooth Spring Animation)
     private func kloterAccordionHeader(batch: Int, count: Int) -> some View {
         let isExpanded = isBatchExpanded(batch)
         let isCurrent = (batch == activeBatchNumber)
 
         return Button {
-            withAnimation(.easeInOut(duration: 0.25)) {
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
                 if expandedBatches.contains(batch) {
                     expandedBatches.remove(batch)
                 } else {
