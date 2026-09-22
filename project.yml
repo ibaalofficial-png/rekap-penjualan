@@ -3,7 +3,7 @@ options:
   bundleIdPrefix: com.ibaal
   deploymentTarget:
     iOS: "15.0"
-  xcodeVersion: "15.0"
+  xcodeVersion: "16.0"
 targets:
   iBaalSales:
     type: application
@@ -22,3 +22,5 @@ targets:
         - "tg"
         - "whatsapp"
         - "https"
+      SWIFT_VERSION: "5.0"
+      SWIFT_STRICT_CONCURRENCY: "minimal"
