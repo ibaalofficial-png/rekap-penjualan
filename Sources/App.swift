@@ -53,24 +53,18 @@ struct SaleItem: Identifiable, Codable {
     var namaBuyer: String
     var kontakBuyer: String
     var udid: String
-    var modal: Int
-    var hargaJual: Int
-    var durasiHari: Int // Durasi Garansi Toko (misal 30 hari untuk basic)
+    var hargaJual: Int // Harga jual bebas sesuai paket garansi
+    var durasiHari: Int
     var catatan: String
+    var batchNumber: Int // Kloter 5 cert ke berapa
 
     var zipFileName: String? = nil
     var certPassword: String? = nil
 
-    var untung: Int {
-        hargaJual - modal
-    }
-
-    // Tanggal Habis Garansi Toko
     var expiredGaransiDate: Date {
         Calendar.current.date(byAdding: .day, value: durasiHari, to: tanggalDaftar) ?? tanggalDaftar
     }
 
-    // Tanggal Habis Sertifikat Apple Asli (Selalu 1 Tahun / 365 Hari)
     var expiredCertAppleDate: Date {
         Calendar.current.date(byAdding: .day, value: 365, to: tanggalDaftar) ?? tanggalDaftar
     }
@@ -105,19 +99,19 @@ struct SaleItem: Identifiable, Codable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, tanggalDaftar, namaBuyer, kontakBuyer, udid, modal, hargaJual, durasiHari, catatan, zipFileName, certPassword
+        case id, tanggalDaftar, namaBuyer, kontakBuyer, udid, hargaJual, durasiHari, catatan, batchNumber, zipFileName, certPassword
     }
 
-    init(id: UUID = UUID(), tanggalDaftar: Date, namaBuyer: String, kontakBuyer: String, udid: String, modal: Int, hargaJual: Int, durasiHari: Int, catatan: String, zipFileName: String? = nil, certPassword: String? = nil) {
+    init(id: UUID = UUID(), tanggalDaftar: Date, namaBuyer: String, kontakBuyer: String, udid: String, hargaJual: Int, durasiHari: Int, catatan: String, batchNumber: Int = 1, zipFileName: String? = nil, certPassword: String? = nil) {
         self.id = id
         self.tanggalDaftar = tanggalDaftar
         self.namaBuyer = namaBuyer
         self.kontakBuyer = kontakBuyer
         self.udid = udid
-        self.modal = modal
         self.hargaJual = hargaJual
         self.durasiHari = durasiHari
         self.catatan = catatan
+        self.batchNumber = batchNumber
         self.zipFileName = zipFileName
         self.certPassword = certPassword
     }
@@ -130,10 +124,10 @@ struct SaleItem: Identifiable, Codable {
         kontakBuyer = kontak
         namaBuyer = try container.decodeIfPresent(String.self, forKey: .namaBuyer) ?? ""
         udid = try container.decodeIfPresent(String.self, forKey: .udid) ?? "-"
-        modal = try container.decodeIfPresent(Int.self, forKey: .modal) ?? 0
-        hargaJual = try container.decodeIfPresent(Int.self, forKey: .hargaJual) ?? 0
-        durasiHari = try container.decodeIfPresent(Int.self, forKey: .durasiHari) ?? 365
+        hargaJual = try container.decodeIfPresent(Int.self, forKey: .hargaJual) ?? 60000
+        durasiHari = try container.decodeIfPresent(Int.self, forKey: .durasiHari) ?? 30
         catatan = try container.decodeIfPresent(String.self, forKey: .catatan) ?? ""
+        batchNumber = try container.decodeIfPresent(Int.self, forKey: .batchNumber) ?? 1
         zipFileName = try container.decodeIfPresent(String.self, forKey: .zipFileName)
         certPassword = try container.decodeIfPresent(String.self, forKey: .certPassword)
     }
@@ -151,7 +145,7 @@ struct GaransiOption: Identifiable {
     let name: String
 }
 
-// MARK: - Extension Helper untuk TextSelection & Glass
+// MARK: - Extension Helper
 extension View {
     @ViewBuilder
     func applyTextSelection(_ enabled: Bool) -> some View {
@@ -247,10 +241,13 @@ struct ContentView: View {
     @Environment(\.openURL) private var openURL
     @State private var items: [SaleItem] = []
     @State private var showAddModal = false
+    @State private var showEditBatchModal = false
     @State private var itemToEdit: SaleItem? = nil
     @State private var timerNow = Date()
 
     @AppStorage("hideFinancials") private var hideFinancials: Bool = false
+    @AppStorage("activeBatchNumber") private var activeBatchNumber: Int = 1
+    @AppStorage("currentBatchModal") private var currentBatchModal: Int = 200000 // Modal top-up per 5 cert
 
     @State private var searchText = ""
     @State private var selectedFilter: FilterGaransi = .semua
@@ -263,9 +260,19 @@ struct ContentView: View {
 
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
-    var totalModal: Int { items.reduce(0) { $0 + $1.modal } }
-    var totalOmset: Int { items.reduce(0) { $0 + $1.hargaJual } }
-    var totalUntung: Int { items.reduce(0) { $0 + $1.untung } }
+    // Filter Khusus Kloter Aktif
+    var activeBatchItems: [SaleItem] {
+        items.filter { $0.batchNumber == activeBatchNumber }
+    }
+    var slotTerjualKloter: Int { activeBatchItems.count }
+    var sisaSlotKloter: Int { max(0, 5 - slotTerjualKloter) }
+
+    // Perhitungan Keuangan Kloter 5 Slot
+    var omsetKloterIni: Int { activeBatchItems.reduce(0) { $0 + $1.hargaJual } }
+    var untungKloterIni: Int { omsetKloterIni - currentBatchModal }
+
+    // Total Seluruh Penjualan
+    var totalOmsetSemua: Int { items.reduce(0) { $0 + $1.hargaJual } }
 
     var filteredItems: [SaleItem] {
         items.filter { item in
@@ -319,6 +326,7 @@ struct ContentView: View {
 
                 ScrollView {
                     VStack(spacing: 18) {
+                        // Dashboard Rekap Finansial per 5 Cert
                         summaryDashboardView
 
                         VStack(spacing: 12) {
@@ -368,6 +376,12 @@ struct ContentView: View {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Menu {
                         Button {
+                            showEditBatchModal = true
+                        } label: {
+                            Label("Atur Modal Top-Up Kloter", systemImage: "dollarsign.circle.fill")
+                        }
+                        Divider()
+                        Button {
                             exportBackup()
                         } label: {
                             Label("Cadangkan Data (Backup)", systemImage: "square.and.arrow.up")
@@ -405,13 +419,20 @@ struct ContentView: View {
                 }
             }
             .sheet(isPresented: $showAddModal) {
-                SaleFormSheet(existingItems: items) { newItem in
+                SaleFormSheet(
+                    existingItems: items,
+                    assignedBatch: activeBatchNumber
+                ) { newItem in
                     items.insert(newItem, at: 0)
                     saveData()
                 }
             }
             .sheet(item: $itemToEdit) { currentItem in
-                SaleFormSheet(itemToEdit: currentItem, existingItems: items) { updatedItem in
+                SaleFormSheet(
+                    itemToEdit: currentItem,
+                    existingItems: items,
+                    assignedBatch: currentItem.batchNumber
+                ) { updatedItem in
                     if let idx = items.firstIndex(where: { $0.id == updatedItem.id }) {
                         items[idx] = updatedItem
                         saveData()
@@ -423,6 +444,16 @@ struct ContentView: View {
                     items.removeAll { $0.id == deletedId }
                     saveData()
                 }
+            }
+            .sheet(isPresented: $showEditBatchModal) {
+                EditBatchModal(
+                    batchNumber: activeBatchNumber,
+                    currentModal: $currentBatchModal,
+                    onStartNewBatch: { newModal in
+                        activeBatchNumber += 1
+                        currentBatchModal = newModal
+                    }
+                )
             }
             .sheet(isPresented: $showShareSheet) {
                 if !shareItems.isEmpty {
@@ -447,10 +478,10 @@ struct ContentView: View {
     private var summaryDashboardView: some View {
         VStack(spacing: 14) {
             HStack {
-                Text("🚀 KEUNTUNGAN BERSIH")
+                Text("🚀 REKAP KLOTER #\(activeBatchNumber) (5 CERT)")
                     .font(.caption)
                     .bold()
-                    .foregroundColor(.green.opacity(0.9))
+                    .foregroundColor(.cyan)
 
                 Spacer()
 
@@ -464,28 +495,101 @@ struct ContentView: View {
                     .foregroundColor(.green)
             }
 
-            Text(hideFinancials ? "Rp ••••••••" : formatIDR(totalUntung))
-                .font(.system(size: 34, weight: .heavy, design: .rounded))
-                .foregroundColor(hideFinancials ? .gray : .green)
-                .shadow(color: hideFinancials ? .clear : Color.green.opacity(0.3), radius: 10)
+            // Keuntungan Bersih Kloter Ini
+            VStack(spacing: 2) {
+                Text(hideFinancials ? "Rp ••••••••" : (untungKloterIni >= 0 ? "+\(formatIDR(untungKloterIni))" : formatIDR(untungKloterIni)))
+                    .font(.system(size: 34, weight: .heavy, design: .rounded))
+                    .foregroundColor(hideFinancials ? .gray : (untungKloterIni >= 0 ? .green : .red))
+                    .shadow(color: hideFinancials ? .clear : (untungKloterIni >= 0 ? Color.green.opacity(0.3) : Color.red.opacity(0.3)), radius: 10)
+
+                Text(untungKloterIni >= 0 ? "Keuntungan Bersih Kloter #\(activeBatchNumber)" : "Belum Balik Modal (Kurang \(formatIDR(abs(untungKloterIni))))")
+                    .font(.caption2)
+                    .foregroundColor(untungKloterIni >= 0 ? .green.opacity(0.8) : .orange)
+            }
+
+            // Modul Slot & Progress Bar 5/5
+            VStack(spacing: 8) {
+                HStack {
+                    HStack(spacing: 4) {
+                        Image(systemName: "cube.box.fill")
+                        Text("\(slotTerjualKloter)/5 Slot Terjual")
+                            .bold()
+                    }
+                    .font(.caption)
+                    .foregroundColor(.white)
+
+                    Spacer()
+
+                    Button {
+                        showEditBatchModal = true
+                    } label: {
+                        HStack(spacing: 3) {
+                            Text("Modal: \(hideFinancials ? "••••" : formatIDR(currentBatchModal))")
+                            Image(systemName: "pencil")
+                        }
+                        .font(.caption2)
+                        .foregroundColor(.cyan)
+                    }
+                }
+
+                // Progress Bar 5 Slot
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.white.opacity(0.1))
+                            .frame(height: 8)
+
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(slotTerjualKloter >= 5 ? Color.green : Color.cyan)
+                            .frame(width: min(geo.size.width * CGFloat(slotTerjualKloter) / 5.0, geo.size.width), height: 8)
+                    }
+                }
+                .frame(height: 8)
+
+                // Tombol Buka Kloter Baru jika sudah penuh 5/5
+                if slotTerjualKloter >= 5 {
+                    Button {
+                        showEditBatchModal = true
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "arrow.clockwise.circle.fill")
+                            Text("5/5 Penuh! Mulai Kloter #\(activeBatchNumber + 1) 🚀")
+                        }
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.green)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 7)
+                        .background(Color.green.opacity(0.18))
+                        .cornerRadius(8)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.green.opacity(0.3), lineWidth: 1)
+                        )
+                    }
+                    .padding(.top, 4)
+                }
+            }
+            .padding(12)
+            .background(Color.black.opacity(0.3))
+            .cornerRadius(12)
 
             Divider().background(Color.white.opacity(0.15))
 
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Total Modal")
+                    Text("Total Omset Kloter Ini")
                         .font(.caption2)
                         .foregroundColor(.gray)
-                    Text(hideFinancials ? "Rp ••••••" : formatIDR(totalModal))
+                    Text(hideFinancials ? "Rp ••••••" : formatIDR(omsetKloterIni))
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(hideFinancials ? .gray : .white)
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 4) {
-                    Text("Total Omset")
+                    Text("Total Semua Omset")
                         .font(.caption2)
                         .foregroundColor(.gray)
-                    Text(hideFinancials ? "Rp ••••••" : formatIDR(totalOmset))
+                    Text(hideFinancials ? "Rp ••••••" : formatIDR(totalOmsetSemua))
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(hideFinancials ? .gray : .cyan)
                 }
@@ -523,14 +627,23 @@ struct ContentView: View {
                     )
                 }
 
+                // Tanda Kloter
+                Text("Kloter #\(item.batchNumber)")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(.white.opacity(0.7))
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 4)
+                    .background(Color.white.opacity(0.08))
+                    .cornerRadius(6)
+
                 Spacer()
 
                 HStack(spacing: 12) {
                     if !hideFinancials {
-                        Text("+\(formatIDR(item.untung))")
+                        Text(formatIDR(item.hargaJual))
                             .font(.footnote)
                             .bold()
-                            .foregroundColor(.green)
+                            .foregroundColor(.cyan)
                     }
 
                     Button {
@@ -624,7 +737,7 @@ struct ContentView: View {
 
             Divider().background(Color.white.opacity(0.1))
 
-            // Info Dual Expired: Garansi Toko & Cert Apple 1 Tahun
+            // Info Garansi Toko & Cert Apple
             VStack(spacing: 6) {
                 HStack {
                     StatusGaransiView(now: timerNow, exp: item.expiredGaransiDate, durasi: item.durasiHari)
@@ -783,12 +896,66 @@ struct ContentView: View {
     }
 }
 
-// MARK: - Formulir Tambah / Edit Penjualan
+// MARK: - Lembar Atur Modal Kloter
+struct EditBatchModal: View {
+    @Environment(\.dismiss) var dismiss
+    var batchNumber: Int
+    @Binding var currentModal: Int
+    var onStartNewBatch: (Int) -> Void
+
+    @State private var modalText = ""
+
+    var body: some View {
+        NavigationView {
+            Form {
+                Section(header: Text("Modal Kloter #\(batchNumber) (5 Cert)")) {
+                    HStack {
+                        Text("Modal Top-Up")
+                        Spacer()
+                        TextField("200000", text: $modalText)
+                            .keyboardType(.numberPad)
+                            .multilineTextAlignment(.trailing)
+                    }
+                }
+
+                Section {
+                    Button("Perbarui Modal Kloter Ini") {
+                        if let val = Int(modalText) {
+                            currentModal = val
+                            dismiss()
+                        }
+                    }
+                    .foregroundColor(.cyan)
+
+                    Button("Mulai Kloter Baru #\(batchNumber + 1) 🚀") {
+                        if let val = Int(modalText) {
+                            onStartNewBatch(val)
+                            dismiss()
+                        }
+                    }
+                    .foregroundColor(.green)
+                }
+            }
+            .navigationTitle("Pengaturan Kloter")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Tutup") { dismiss() }
+                }
+            }
+            .onAppear {
+                modalText = String(currentModal)
+            }
+        }
+    }
+}
+
+// MARK: - Formulir Tambah / Edit Penjualan (Cukup Input Harga Jual Saja)
 struct SaleFormSheet: View {
     @Environment(\.dismiss) var dismiss
 
     var itemToEdit: SaleItem? = nil
     var existingItems: [SaleItem] = []
+    var assignedBatch: Int = 1
     var onSave: (SaleItem) -> Void
     var onDelete: ((UUID) -> Void)? = nil
 
@@ -797,10 +964,10 @@ struct SaleFormSheet: View {
     @State private var kontakBuyer = ""
     @State private var tanggalDaftar = Date()
     @State private var udid = ""
-    @State private var modalText = "75000"
-    @State private var hargaJualText = "150000"
-    @State private var selectedGaransi = 30 // Default: 1 Bulan (Paket Basic)
+    @State private var hargaJualText = "60000" // Cukup isi harga jual suka-suka
+    @State private var selectedGaransi = 30
     @State private var catatan = ""
+    @State private var batchNumber = 1
 
     @State private var zipFileName: String? = nil
     @State private var certPassword = ""
@@ -809,12 +976,6 @@ struct SaleFormSheet: View {
     @State private var showDuplicateAlert = false
     @State private var duplicateDetails = ""
     @State private var pendingItemToSave: SaleItem? = nil
-
-    var untungOtomatis: Int {
-        let jual = Int(hargaJualText) ?? 0
-        let modal = Int(modalText) ?? 0
-        return jual - modal
-    }
 
     let opsiGaransi: [GaransiOption] = [
         GaransiOption(id: 30, name: "1 Bulan (Paket Basic)"),
@@ -832,6 +993,19 @@ struct SaleFormSheet: View {
                     TextField("Nomor WA (08xxx) atau Telegram (@username)", text: $kontakBuyer)
                         .keyboardType(.emailAddress)
                         .autocapitalization(.none)
+                }
+
+                Section(header: Text("Harga Jual Suka-Suka"), footer: Text("Masukkan harga sesuai kesepakatan / durasi garansi yang dipilih pembeli.")) {
+                    HStack {
+                        Text("Harga Jual")
+                            .bold()
+                        Spacer()
+                        TextField("60000", text: $hargaJualText)
+                            .keyboardType(.numberPad)
+                            .multilineTextAlignment(.trailing)
+                            .font(.system(size: 17, weight: .bold))
+                            .foregroundColor(.cyan)
+                    }
                 }
 
                 Section(header: Text("File ZIP Sertifikat (Opsional)"), footer: Text("Saat dibagikan, file otomatis bernama 'password - [password].zip'")) {
@@ -892,31 +1066,6 @@ struct SaleFormSheet: View {
                     TextEditor(text: $udid)
                         .frame(minHeight: 60)
                         .font(.system(size: 13, design: .monospaced))
-                }
-
-                Section(header: Text("Perhitungan Finansial")) {
-                    HStack {
-                        Text("Modal")
-                        Spacer()
-                        TextField("Modal", text: $modalText)
-                            .keyboardType(.numberPad)
-                            .multilineTextAlignment(.trailing)
-                    }
-                    HStack {
-                        Text("Harga Jual")
-                        Spacer()
-                        TextField("Jual", text: $hargaJualText)
-                            .keyboardType(.numberPad)
-                            .multilineTextAlignment(.trailing)
-                    }
-                    HStack {
-                        Text("Untung Bersih")
-                            .bold()
-                        Spacer()
-                        Text("Rp \(untungOtomatis)")
-                            .font(.system(size: 16, weight: .heavy))
-                            .foregroundColor(.green)
-                    }
                 }
 
                 Section(header: Text("Catatan Perangkat")) {
@@ -982,12 +1131,15 @@ struct SaleFormSheet: View {
                     kontakBuyer = item.kontakBuyer
                     tanggalDaftar = item.tanggalDaftar
                     udid = item.udid
-                    modalText = String(item.modal)
                     hargaJualText = String(item.hargaJual)
                     selectedGaransi = item.durasiHari
                     catatan = item.catatan
+                    batchNumber = item.batchNumber
                     zipFileName = item.zipFileName
                     certPassword = item.certPassword ?? ""
+                } else {
+                    batchNumber = assignedBatch
+                    hargaJualText = "60000"
                 }
             }
         }
@@ -1001,10 +1153,10 @@ struct SaleFormSheet: View {
             namaBuyer: namaBuyer.trimmingCharacters(in: .whitespacesAndNewlines),
             kontakBuyer: kontakBuyer.trimmingCharacters(in: .whitespacesAndNewlines),
             udid: cleanUDID.isEmpty ? "-" : cleanUDID,
-            modal: Int(modalText) ?? 0,
-            hargaJual: Int(hargaJualText) ?? 0,
+            hargaJual: Int(hargaJualText) ?? 60000,
             durasiHari: selectedGaransi,
             catatan: catatan,
+            batchNumber: batchNumber,
             zipFileName: zipFileName,
             certPassword: certPassword.trimmingCharacters(in: .whitespacesAndNewlines)
         )
