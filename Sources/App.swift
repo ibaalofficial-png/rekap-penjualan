@@ -3,6 +3,23 @@ import UIKit
 import Combine
 import UniformTypeIdentifiers
 
+// MARK: - Format Helper Global
+struct AppFormatters {
+    static func idr(_ num: Int) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.locale = Locale(identifier: "id_ID")
+        formatter.maximumFractionDigits = 0
+        return formatter.string(from: NSNumber(value: num)) ?? "Rp 0"
+    }
+
+    static func date(_ d: Date) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "dd/MM/yyyy"
+        return f.string(from: d)
+    }
+}
+
 // MARK: - Manajer Penyimpanan Modal per Kloter
 class BatchModalManager {
     static let shared = BatchModalManager()
@@ -483,28 +500,33 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showAddModal) {
                 SaleFormSheet(
-                    existingItems: items
-                ) { newItem in
-                    items.insert(newItem, at: 0)
-                    recalculateAndSave()
-                }
+                    itemToEdit: nil,
+                    existingItems: items,
+                    onDelete: nil,
+                    onSave: { newItem in
+                        items.insert(newItem, at: 0)
+                        recalculateAndSave()
+                    }
+                )
             }
             .sheet(item: $itemToEdit) { currentItem in
                 SaleFormSheet(
                     itemToEdit: currentItem,
-                    existingItems: items
-                ) { updatedItem in
-                    if let idx = items.firstIndex(where: { $0.id == updatedItem.id }) {
-                        items[idx] = updatedItem
+                    existingItems: items,
+                    onDelete: { deletedId in
+                        if let itemToDelete = items.first(where: { $0.id == deletedId }) {
+                            CertStorageManager.shared.deleteFile(fileName: itemToDelete.zipFileName)
+                        }
+                        items.removeAll { $0.id == deletedId }
                         recalculateAndSave()
+                    },
+                    onSave: { updatedItem in
+                        if let idx = items.firstIndex(where: { $0.id == updatedItem.id }) {
+                            items[idx] = updatedItem
+                            recalculateAndSave()
+                        }
                     }
-                } onDelete: { deletedId in
-                    if let itemToDelete = items.first(where: { $0.id == deletedId }) {
-                        CertStorageManager.shared.deleteFile(fileName: itemToDelete.zipFileName)
-                    }
-                    items.removeAll { $0.id == deletedId }
-                    recalculateAndSave()
-                }
+                )
             }
             .sheet(isPresented: $showEditBatchModal) {
                 EditBatchModalSheet(
@@ -565,12 +587,12 @@ struct ContentView: View {
             }
 
             VStack(spacing: 3) {
-                Text(hideFinancials ? "Rp ••••••••" : (untungKloterAktif >= 0 ? "+\(formatIDR(untungKloterAktif))" : formatIDR(untungKloterAktif)))
+                Text(hideFinancials ? "Rp ••••••••" : (untungKloterAktif >= 0 ? "+\(AppFormatters.idr(untungKloterAktif))" : AppFormatters.idr(untungKloterAktif)))
                     .font(.system(size: 34, weight: .heavy, design: .rounded))
                     .foregroundColor(hideFinancials ? .gray : (untungKloterAktif >= 0 ? .green : .red))
                     .shadow(color: hideFinancials ? .clear : (untungKloterAktif >= 0 ? Color.green.opacity(0.3) : Color.red.opacity(0.3)), radius: 10)
 
-                Text(untungKloterAktif >= 0 ? "Keuntungan Bersih Kloter Ini" : "Belum Balik Modal (Kurang \(formatIDR(abs(untungKloterAktif))))")
+                Text(untungKloterAktif >= 0 ? "Keuntungan Bersih Kloter Ini" : "Belum Balik Modal (Kurang \(AppFormatters.idr(abs(untungKloterAktif))))")
                     .font(.caption2)
                     .foregroundColor(untungKloterAktif >= 0 ? .green.opacity(0.85) : .orange)
             }
@@ -591,7 +613,7 @@ struct ContentView: View {
                         showEditBatchModal = true
                     } label: {
                         HStack(spacing: 3) {
-                            Text("Modal: \(hideFinancials ? "••••" : formatIDR(modalKloterAktif))")
+                            Text("Modal: \(hideFinancials ? "••••" : AppFormatters.idr(modalKloterAktif))")
                             Image(systemName: "pencil")
                         }
                         .font(.caption2)
@@ -630,7 +652,7 @@ struct ContentView: View {
                     Text("Omset Kloter Ini")
                         .font(.caption2)
                         .foregroundColor(.gray)
-                    Text(hideFinancials ? "Rp ••••••" : formatIDR(omsetKloterAktif))
+                    Text(hideFinancials ? "Rp ••••••" : AppFormatters.idr(omsetKloterAktif))
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(hideFinancials ? .gray : .white)
                 }
@@ -639,7 +661,7 @@ struct ContentView: View {
                     Text("Total Semua Omset")
                         .font(.caption2)
                         .foregroundColor(.gray)
-                    Text(hideFinancials ? "Rp ••••••" : formatIDR(totalOmsetSemua))
+                    Text(hideFinancials ? "Rp ••••••" : AppFormatters.idr(totalOmsetSemua))
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(hideFinancials ? .gray : .cyan)
                 }
@@ -689,7 +711,7 @@ struct ContentView: View {
 
                 HStack(spacing: 12) {
                     if !hideFinancials {
-                        Text(formatIDR(item.hargaJual))
+                        Text(AppFormatters.idr(item.hargaJual))
                             .font(.footnote)
                             .bold()
                             .foregroundColor(.cyan)
@@ -789,17 +811,17 @@ struct ContentView: View {
                 HStack {
                     StatusGaransiView(now: timerNow, exp: item.expiredGaransiDate, durasi: item.durasiHari)
                     Spacer()
-                    Text("Garansi s/d: \(item.durasiHari == 0 ? "Non-Garansi" : formatDate(item.expiredGaransiDate))")
+                    Text("Garansi s/d: \(item.durasiHari == 0 ? "Non-Garansi" : AppFormatters.date(item.expiredGaransiDate))")
                         .font(.caption2)
                         .bold()
                         .foregroundColor(item.durasiHari == 0 ? .gray : .orange.opacity(0.95))
                 }
                 HStack {
-                    Text("Daftar: \(formatDate(item.tanggalDaftar))")
+                    Text("Daftar: \(AppFormatters.date(item.tanggalDaftar))")
                         .font(.system(size: 11))
                         .foregroundColor(.gray)
                     Spacer()
-                    Text("Cert Apple: \(formatDate(item.expiredCertAppleDate))")
+                    Text("Cert Apple: \(AppFormatters.date(item.expiredCertAppleDate))")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(.cyan.opacity(0.85))
                 }
@@ -915,20 +937,6 @@ struct ContentView: View {
         }
     }
 
-    private func formatIDR(_ num: Int) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.locale = Locale(identifier: "id_ID")
-        formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: num)) ?? "Rp 0"
-    }
-
-    private func formatDate(_ d: Date) -> String {
-        let f = DateFormatter()
-        f.dateFormat = "dd/MM/yyyy"
-        return f.string(from: d)
-    }
-
     private func recalculateAndSave() {
         let sortedAscending = items.sorted { $0.tanggalDaftar < $1.tanggalDaftar }
         var fixedItems: [SaleItem] = []
@@ -1001,7 +1009,7 @@ struct CompletedBatchCard: View {
                     Text("Modal Paket:")
                         .font(.caption2)
                         .foregroundColor(.gray)
-                    Text(hideFinancials ? "Rp ••••••" : formatIDR(modal))
+                    Text(hideFinancials ? "Rp ••••••" : AppFormatters.idr(modal))
                         .font(.system(size: 13, weight: .semibold))
                 }
                 Spacer()
@@ -1009,7 +1017,7 @@ struct CompletedBatchCard: View {
                     Text("Total Omset:")
                         .font(.caption2)
                         .foregroundColor(.gray)
-                    Text(hideFinancials ? "Rp ••••••" : formatIDR(omset))
+                    Text(hideFinancials ? "Rp ••••••" : AppFormatters.idr(omset))
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(.cyan)
                 }
@@ -1018,7 +1026,7 @@ struct CompletedBatchCard: View {
                     Text("Untung Bersih:")
                         .font(.caption2)
                         .foregroundColor(.gray)
-                    Text(hideFinancials ? "Rp ••••••" : "+\(formatIDR(untung))")
+                    Text(hideFinancials ? "Rp ••••••" : "+\(AppFormatters.idr(untung))")
                         .font(.system(size: 13, weight: .bold))
                         .foregroundColor(.green)
                 }
@@ -1031,7 +1039,7 @@ struct CompletedBatchCard: View {
                             .font(.caption)
                             .foregroundColor(.white.opacity(0.9))
                         Spacer()
-                        Text(hideFinancials ? "••••" : formatIDR(item.hargaJual))
+                        Text(hideFinancials ? "••••" : AppFormatters.idr(item.hargaJual))
                             .font(.caption)
                             .bold()
                             .foregroundColor(.cyan.opacity(0.9))
@@ -1045,14 +1053,6 @@ struct CompletedBatchCard: View {
         .padding()
         .liquidGlass(cornerRadius: 16)
         .padding(.horizontal)
-    }
-
-    private func formatIDR(_ num: Int) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.locale = Locale(identifier: "id_ID")
-        formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: num)) ?? "Rp 0"
     }
 }
 
@@ -1093,7 +1093,7 @@ struct BatchHistorySheet: View {
                                 .bold()
                                 .foregroundColor(.green.opacity(0.8))
 
-                            Text(hideFinancials ? "Rp ••••••••" : "+\(formatIDR(totalUntungSemuaKloterSelesai))")
+                            Text(hideFinancials ? "Rp ••••••••" : "+\(AppFormatters.idr(totalUntungSemuaKloterSelesai))")
                                 .font(.system(size: 30, weight: .heavy, design: .rounded))
                                 .foregroundColor(hideFinancials ? .gray : .green)
 
@@ -1126,14 +1126,6 @@ struct BatchHistorySheet: View {
                 }
             }
         }
-    }
-
-    private func formatIDR(_ num: Int) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.locale = Locale(identifier: "id_ID")
-        formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: num)) ?? "Rp 0"
     }
 }
 
@@ -1188,10 +1180,10 @@ struct EditBatchModalSheet: View {
 struct SaleFormSheet: View {
     @Environment(\.dismiss) var dismiss
 
-    var itemToEdit: SaleItem? = nil
-    var existingItems: [SaleItem] = []
+    var itemToEdit: SaleItem?
+    var existingItems: [SaleItem]
+    var onDelete: ((UUID) -> Void)?
     var onSave: (SaleItem) -> Void
-    var onDelete: ((UUID) -> Void)? = nil
 
     @State private var itemId = UUID()
     @State private var namaBuyer = ""
@@ -1210,6 +1202,13 @@ struct SaleFormSheet: View {
     @State private var showDuplicateAlert = false
     @State private var duplicateDetails = ""
     @State private var pendingItemToSave: SaleItem? = nil
+
+    init(itemToEdit: SaleItem? = nil, existingItems: [SaleItem] = [], onDelete: ((UUID) -> Void)? = nil, onSave: @escaping (SaleItem) -> Void) {
+        self.itemToEdit = itemToEdit
+        self.existingItems = existingItems
+        self.onDelete = onDelete
+        self.onSave = onSave
+    }
 
     let opsiGaransi: [GaransiOption] = [
         GaransiOption(id: 30, name: "1 Bulan (Paket Basic)"),
@@ -1331,13 +1330,11 @@ struct SaleFormSheet: View {
                     Button("Batal") { dismiss() }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
+                    Button("Simpan") {
                         validateAndSave()
-                    } label: {
-                        Text("Simpan")
-                            .bold()
-                            .foregroundColor(.cyan)
                     }
+                    .bold()
+                    .foregroundColor(.cyan)
                 }
             }
             .fileImporter(isPresented: $showZipPicker, allowedContentTypes: [.zip, .archive, .data]) { result in
