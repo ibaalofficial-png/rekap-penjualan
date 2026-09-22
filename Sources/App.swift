@@ -145,6 +145,39 @@ struct GaransiOption: Identifiable {
     let name: String
 }
 
+// MARK: - Modifier Liquid Glass Style
+struct LiquidGlassModifier: ViewModifier {
+    var cornerRadius: CGFloat = 18
+
+    func body(content: Content) -> some View {
+        content
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.35),
+                                Color.white.opacity(0.08),
+                                Color.cyan.opacity(0.15)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
+                    )
+            )
+            .shadow(color: Color.black.opacity(0.35), radius: 15, x: 0, y: 8)
+    }
+}
+
+extension View {
+    func liquidGlass(cornerRadius: CGFloat = 18) -> some View {
+        self.modifier(LiquidGlassModifier(cornerRadius: cornerRadius))
+    }
+}
+
 // MARK: - Entry Point
 @main
 struct iBaalSalesApp: App {
@@ -193,6 +226,7 @@ struct StatusGaransiView: View {
             Circle()
                 .fill(status.color)
                 .frame(width: 8, height: 8)
+                .shadow(color: status.color.opacity(0.8), radius: 4)
             Text(status.text)
                 .font(.caption)
                 .bold()
@@ -256,13 +290,32 @@ struct ContentView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                Color(red: 0.08, green: 0.08, blue: 0.10).ignoresSafeArea()
+                // Background Gelap dengan Ambient Glowing Orbs khas Liquid Glass
+                Color.black.ignoresSafeArea()
+
+                Circle()
+                    .fill(Color.cyan.opacity(0.28))
+                    .frame(width: 280, height: 280)
+                    .blur(radius: 80)
+                    .offset(x: -120, y: -240)
+
+                Circle()
+                    .fill(Color.purple.opacity(0.22))
+                    .frame(width: 260, height: 260)
+                    .blur(radius: 90)
+                    .offset(x: 140, y: -40)
+
+                Circle()
+                    .fill(Color.blue.opacity(0.18))
+                    .frame(width: 240, height: 240)
+                    .blur(radius: 80)
+                    .offset(x: -80, y: 320)
 
                 ScrollView {
-                    VStack(spacing: 16) {
+                    VStack(spacing: 18) {
                         summaryDashboardView
 
-                        VStack(spacing: 10) {
+                        VStack(spacing: 12) {
                             Picker("Filter", selection: $selectedFilter) {
                                 ForEach(FilterGaransi.allCases) { filter in
                                     Text(filter.rawValue).tag(filter)
@@ -274,7 +327,7 @@ struct ContentView: View {
                             HStack {
                                 Text("DAFTAR PEMBELI")
                                     .font(.system(size: 13, weight: .bold))
-                                    .foregroundColor(.gray)
+                                    .foregroundColor(.white.opacity(0.6))
                                 Spacer()
                                 Text("\(filteredItems.count) Terfilter / \(items.count) Total")
                                     .font(.system(size: 12, weight: .semibold))
@@ -287,7 +340,7 @@ struct ContentView: View {
                             VStack(spacing: 12) {
                                 Image(systemName: "magnifyingglass")
                                     .font(.system(size: 40))
-                                    .foregroundColor(.gray.opacity(0.5))
+                                    .foregroundColor(.white.opacity(0.3))
                                 Text(items.isEmpty ? "Belum ada transaksi.\nTekan + untuk menambah." : "Tidak ditemukan transaksi yang cocok.")
                                     .font(.subheadline)
                                     .foregroundColor(.gray)
@@ -321,7 +374,7 @@ struct ContentView: View {
                     } label: {
                         Image(systemName: "ellipsis.circle.fill")
                             .font(.system(size: 20))
-                            .foregroundColor(.gray)
+                            .foregroundColor(.white.opacity(0.8))
                     }
                 }
 
@@ -333,7 +386,7 @@ struct ContentView: View {
                     } label: {
                         Image(systemName: hideFinancials ? "eye.slash.fill" : "eye.fill")
                             .font(.system(size: 18))
-                            .foregroundColor(hideFinancials ? .orange : .gray)
+                            .foregroundColor(hideFinancials ? .orange : .white.opacity(0.8))
                     }
 
                     Button {
@@ -391,7 +444,7 @@ struct ContentView: View {
                 Text("🚀 KEUNTUNGAN BERSIH")
                     .font(.caption)
                     .bold()
-                    .foregroundColor(.green.opacity(0.8))
+                    .foregroundColor(.green.opacity(0.9))
 
                 Spacer()
 
@@ -407,6 +460,7 @@ struct ContentView: View {
                 } else {
                     Text("Live Monitor")
                         .font(.caption2)
+                        .bold()
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
                         .background(Color.green.opacity(0.2))
@@ -416,10 +470,11 @@ struct ContentView: View {
             }
 
             Text(hideFinancials ? "Rp ••••••••" : formatIDR(totalUntung))
-                .font(.system(size: 32, weight: .heavy, design: .rounded))
+                .font(.system(size: 34, weight: .heavy, design: .rounded))
                 .foregroundColor(hideFinancials ? .gray : .green)
+                .shadow(color: hideFinancials ? .clear : Color.green.opacity(0.3), radius: 10)
 
-            Divider().background(Color.white.opacity(0.1))
+            Divider().background(Color.white.opacity(0.15))
 
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
@@ -427,7 +482,7 @@ struct ContentView: View {
                         .font(.caption2)
                         .foregroundColor(.gray)
                     Text(hideFinancials ? "Rp ••••••" : formatIDR(totalModal))
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(hideFinancials ? .gray : .white)
                 }
                 Spacer()
@@ -436,14 +491,13 @@ struct ContentView: View {
                         .font(.caption2)
                         .foregroundColor(.gray)
                     Text(hideFinancials ? "Rp ••••••" : formatIDR(totalOmset))
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(hideFinancials ? .gray : .cyan)
                 }
             }
         }
-        .padding()
-        .background(Color(red: 0.14, green: 0.14, blue: 0.18))
-        .cornerRadius(16)
+        .padding(18)
+        .liquidGlass(cornerRadius: 20)
         .padding(.horizontal)
     }
 
@@ -452,7 +506,7 @@ struct ContentView: View {
         let badgeColor: Color = isTele ? Color(red: 0.20, green: 0.65, blue: 0.95) : Color(red: 0.15, green: 0.82, blue: 0.45)
         let iconName = isTele ? "paperplane.fill" : "phone.bubble.left.fill"
 
-        return VStack(alignment: .leading, spacing: 12) {
+        return VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .center) {
                 Button {
                     openChatLink(item.kontakBuyer)
@@ -466,8 +520,12 @@ struct ContentView: View {
                     .foregroundColor(badgeColor)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 7)
-                    .background(badgeColor.opacity(0.16))
-                    .cornerRadius(8)
+                    .background(badgeColor.opacity(0.18))
+                    .cornerRadius(10)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(badgeColor.opacity(0.3), lineWidth: 1)
+                    )
                 }
 
                 Spacer()
@@ -485,12 +543,11 @@ struct ContentView: View {
                     } label: {
                         Image(systemName: "pencil.circle.fill")
                             .font(.system(size: 22))
-                            .foregroundColor(.gray.opacity(0.9))
+                            .foregroundColor(.white.opacity(0.6))
                     }
                 }
             }
 
-            // Tombol Kirim ZIP Cert (Nama file terformat rapi saat dikirim)
             if item.hasCertZip || (item.certPassword != nil && !item.certPassword!.isEmpty) {
                 HStack(spacing: 8) {
                     if item.hasCertZip {
@@ -501,9 +558,13 @@ struct ContentView: View {
                                 .font(.system(size: 11, weight: .bold))
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 6)
-                                .background(Color.blue.opacity(0.2))
+                                .background(Color.cyan.opacity(0.18))
                                 .foregroundColor(.cyan)
-                                .cornerRadius(6)
+                                .cornerRadius(8)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(Color.cyan.opacity(0.3), lineWidth: 1)
+                                )
                         }
                     }
 
@@ -520,15 +581,18 @@ struct ContentView: View {
                             .padding(.vertical, 6)
                             .background(Color.yellow.opacity(0.15))
                             .foregroundColor(.yellow)
-                            .cornerRadius(6)
+                            .cornerRadius(8)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.yellow.opacity(0.25), lineWidth: 1)
+                            )
                         }
                     }
                     Spacer()
                 }
             }
 
-            // Nomor UDID Full
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 5) {
                 HStack {
                     Text("UDID:")
                         .font(.caption2)
@@ -544,15 +608,18 @@ struct ContentView: View {
                 }
                 Text(item.udid)
                     .font(.system(size: 12, weight: .medium, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.9))
+                    .foregroundColor(.white.opacity(0.95))
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(8)
-            .background(Color.black.opacity(0.25))
-            .cornerRadius(8)
+            .padding(10)
+            .background(Color.black.opacity(0.35))
+            .cornerRadius(10)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+            )
 
-            // Catatan Perangkat
             if !item.catatan.isEmpty && item.catatan != "-" {
                 Text("📱 \(item.catatan)")
                     .font(.caption2)
@@ -578,25 +645,21 @@ struct ContentView: View {
                 }
             }
         }
-        .padding()
-        .background(Color(red: 0.12, green: 0.12, blue: 0.15))
-        .cornerRadius(14)
+        .padding(16)
+        .liquidGlass(cornerRadius: 18)
         .padding(.horizontal)
     }
 
-    // Fungsi Pengiriman ZIP dengan Nama Khusus (password - ibaalcert.zip)
     private func shareCertZip(item: SaleItem) {
         guard let zipName = item.zipFileName,
               let originalURL = CertStorageManager.shared.getFileURL(fileName: zipName) else {
             return
         }
 
-        // Ambil password: pakai inputan khusus atau default 'ibaalcert'
         let pass = (item.certPassword?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false)
             ? item.certPassword!.trimmingCharacters(in: .whitespacesAndNewlines)
             : "ibaalcert"
 
-        // Nama file otomatis rapi saat dikirim ke customer
         let customFileName = "password - \(pass).zip"
         let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(customFileName)
 
@@ -762,8 +825,8 @@ struct SaleFormSheet: View {
                         .autocapitalization(.none)
                 }
 
-                Section(header: Text("File ZIP Sertifikat (Opsional)"), footer: Text("Saat dibagikan, file akan otomatis diberi nama 'password - [password].zip'")) {
-                    if let name = zipFileName {
+                Section(header: Text("File ZIP Sertifikat (Opsional)"), footer: Text("Saat dibagikan, file otomatis bernama 'password - [password].zip'")) {
+                    if let _ = zipFileName {
                         HStack {
                             Image(systemName: "doc.zipper")
                                 .foregroundColor(.cyan)
