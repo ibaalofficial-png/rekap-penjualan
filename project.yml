@@ -1,0 +1,24 @@
+name: iBaalSales
+options:
+  bundleIdPrefix: com.ibaal
+  deploymentTarget:
+    iOS: "15.0"
+  xcodeVersion: "15.0"
+targets:
+  iBaalSales:
+    type: application
+    platform: iOS
+    deploymentTarget: "15.0"
+    sources:
+      - Sources
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.ibaal.salescert
+      MARKETING_VERSION: "1.0.0"
+      CURRENT_PROJECT_VERSION: "1"
+      GENERATE_INFOPLIST_FILE: YES
+      INFOPLIST_KEY_UILaunchScreen_Generation: YES
+      INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait"
+      INFOPLIST_KEY_LSApplicationQueriesSchemes:
+        - "tg"
+        - "whatsapp"
+        - "https"
