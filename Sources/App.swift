@@ -180,7 +180,7 @@ struct GaransiOption: Identifiable {
     let name: String
 }
 
-// MARK: - Extension Helper
+// MARK: - Extension Liquid Glass Modern
 extension View {
     @ViewBuilder
     func applyTextSelection(_ enabled: Bool) -> some View {
@@ -191,26 +191,48 @@ extension View {
         }
     }
 
-    func liquidGlass(cornerRadius: CGFloat = 18) -> some View {
+    func liquidGlass(cornerRadius: CGFloat = 20) -> some View {
         self
-            .background(.ultraThinMaterial)
+            .background(
+                ZStack {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(Color.black.opacity(0.35))
+
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(.ultraThinMaterial)
+
+                    // Efek Pantulan Cahaya Atas Kaca (Specular Highlight)
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.12),
+                                    Color.white.opacity(0.02),
+                                    Color.clear
+                                ],
+                                startPoint: .top,
+                                endPoint: .center
+                            )
+                        )
+                }
+            )
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .stroke(
                         LinearGradient(
-                            gradient: Gradient(colors: [
-                                Color.white.opacity(0.35),
-                                Color.white.opacity(0.08),
-                                Color.cyan.opacity(0.15)
-                            ]),
+                            stops: [
+                                .init(color: Color.white.opacity(0.45), location: 0.0),
+                                .init(color: Color.white.opacity(0.10), location: 0.4),
+                                .init(color: Color.cyan.opacity(0.25), location: 1.0)
+                            ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
                         lineWidth: 1
                     )
             )
-            .shadow(color: Color.black.opacity(0.35), radius: 15, x: 0, y: 8)
+            .shadow(color: Color.black.opacity(0.4), radius: 18, x: 0, y: 10)
     }
 }
 
@@ -271,6 +293,62 @@ struct StatusGaransiView: View {
     }
 }
 
+// MARK: - Custom Liquid Glass Segmented Capsule Switch
+struct LiquidGlassSegmentedSwitch: View {
+    @Binding var selected: FilterGaransi
+    @Namespace private var filterAnimation
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(FilterGaransi.allCases) { filter in
+                let isSelected = (selected == filter)
+                Button {
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.78)) {
+                        selected = filter
+                    }
+                } label: {
+                    Text(filter.rawValue)
+                        .font(.system(size: 13, weight: isSelected ? .bold : .medium))
+                        .foregroundColor(isSelected ? .white : .white.opacity(0.55))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(
+                            ZStack {
+                                if isSelected {
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .fill(Color.cyan.opacity(0.28))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                                .stroke(Color.white.opacity(0.35), lineWidth: 1)
+                                        )
+                                        .shadow(color: Color.cyan.opacity(0.4), radius: 8, y: 2)
+                                        .matchedGeometryEffect(id: "GLASS_CAPSULE", in: filterAnimation)
+                                }
+                            }
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(4)
+        .background(Color.black.opacity(0.45))
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.3), Color.white.opacity(0.05), Color.cyan.opacity(0.18)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
+        )
+        .padding(.horizontal)
+    }
+}
+
 // MARK: - Tampilan Utama
 struct ContentView: View {
     @Environment(\.openURL) private var openURL
@@ -282,8 +360,6 @@ struct ContentView: View {
     @State private var timerNow = Date()
 
     @AppStorage("hideFinancials") private var hideFinancials: Bool = false
-
-    // State Pengontrol Kloter yang Terbuka
     @State private var expandedBatches: Set<Int> = []
 
     @State private var searchText = ""
@@ -374,22 +450,22 @@ struct ContentView: View {
                 Color.black.ignoresSafeArea()
 
                 Circle()
-                    .fill(Color.cyan.opacity(0.28))
-                    .frame(width: 280, height: 280)
-                    .blur(radius: 80)
+                    .fill(Color.cyan.opacity(0.30))
+                    .frame(width: 320, height: 320)
+                    .blur(radius: 90)
                     .offset(x: -120, y: -240)
 
                 Circle()
-                    .fill(Color.purple.opacity(0.22))
-                    .frame(width: 260, height: 260)
-                    .blur(radius: 90)
-                    .offset(x: 140, y: -40)
+                    .fill(Color.purple.opacity(0.24))
+                    .frame(width: 290, height: 290)
+                    .blur(radius: 100)
+                    .offset(x: 140, y: -20)
 
                 Circle()
-                    .fill(Color.blue.opacity(0.18))
-                    .frame(width: 240, height: 240)
-                    .blur(radius: 80)
-                    .offset(x: -80, y: 320)
+                    .fill(Color.blue.opacity(0.20))
+                    .frame(width: 260, height: 260)
+                    .blur(radius: 85)
+                    .offset(x: -70, y: 340)
 
                 ScrollView {
                     VStack(spacing: 18) {
@@ -399,7 +475,7 @@ struct ContentView: View {
                             Button {
                                 showHistoryModal = true
                             } label: {
-                                HStack {
+                                HStack(spacing: 8) {
                                     Image(systemName: "archivebox.fill")
                                         .foregroundColor(.green)
                                     Text("\(completedBatchesCount) Kloter Selesai Tersimpan")
@@ -412,37 +488,26 @@ struct ContentView: View {
                                         .bold()
                                         .foregroundColor(.green)
                                 }
-                                .padding(12)
-                                .background(Color.green.opacity(0.15))
-                                .cornerRadius(12)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(Color.green.opacity(0.3), lineWidth: 1)
-                                )
+                                .padding(14)
+                                .liquidGlass(cornerRadius: 16)
                             }
+                            .buttonStyle(.plain)
                             .padding(.horizontal)
                         }
 
-                        VStack(spacing: 12) {
-                            Picker("Filter", selection: $selectedFilter) {
-                                ForEach(FilterGaransi.allCases) { filter in
-                                    Text(filter.rawValue).tag(filter)
-                                }
-                            }
-                            .pickerStyle(.segmented)
-                            .padding(.horizontal)
+                        // Kapsul Switch Liquid Glass
+                        LiquidGlassSegmentedSwitch(selected: $selectedFilter)
 
-                            HStack {
-                                Text("DAFTAR PEMBELI PER KLOTER")
-                                    .font(.system(size: 13, weight: .bold))
-                                    .foregroundColor(.white.opacity(0.6))
-                                Spacer()
-                                Text("\(filteredItems.count) Terfilter / \(items.count) Total")
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundColor(.cyan)
-                            }
-                            .padding(.horizontal)
+                        HStack {
+                            Text("DAFTAR PEMBELI")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(.white.opacity(0.55))
+                            Spacer()
+                            Text("\(filteredItems.count) Terfilter / \(items.count) Total")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(.cyan)
                         }
+                        .padding(.horizontal)
 
                         if filteredItems.isEmpty {
                             VStack(spacing: 12) {
@@ -456,7 +521,6 @@ struct ContentView: View {
                             }
                             .padding(.top, 40)
                         } else {
-                            // Tampilan Akordeon Collapsible Halus (Bebas Glitch)
                             ForEach(batchesInFiltered, id: \.self) { batch in
                                 let batchSales = itemsInBatch(batch)
                                 VStack(spacing: 10) {
@@ -507,7 +571,7 @@ struct ContentView: View {
                     } label: {
                         Image(systemName: "ellipsis.circle.fill")
                             .font(.system(size: 20))
-                            .foregroundColor(.white.opacity(0.8))
+                            .foregroundColor(.white.opacity(0.85))
                     }
                 }
 
@@ -603,7 +667,7 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Header Akordeon Kloter (Smooth Spring Animation)
+    // MARK: - Header Akordeon Liquid Glass
     private func kloterAccordionHeader(batch: Int, count: Int) -> some View {
         let isExpanded = isBatchExpanded(batch)
         let isCurrent = (batch == activeBatchNumber)
@@ -629,19 +693,19 @@ struct ContentView: View {
                 if isCurrent {
                     Text("AKTIF")
                         .font(.system(size: 9, weight: .heavy))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.cyan.opacity(0.2))
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(Color.cyan.opacity(0.22))
                         .foregroundColor(.cyan)
-                        .cornerRadius(4)
+                        .cornerRadius(6)
                 } else {
                     Text("SELESAI")
                         .font(.system(size: 9, weight: .heavy))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.green.opacity(0.2))
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(Color.green.opacity(0.22))
                         .foregroundColor(.green)
-                        .cornerRadius(4)
+                        .cornerRadius(6)
                 }
 
                 Spacer()
@@ -650,14 +714,9 @@ struct ContentView: View {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(count >= 5 ? .green : .gray)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(Color.white.opacity(0.06))
-            .cornerRadius(12)
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(isCurrent ? Color.cyan.opacity(0.3) : Color.white.opacity(0.08), lineWidth: 1)
-            )
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .liquidGlass(cornerRadius: 16)
         }
         .buttonStyle(.plain)
         .padding(.horizontal)
@@ -744,7 +803,7 @@ struct ContentView: View {
             }
             .padding(12)
             .background(Color.black.opacity(0.3))
-            .cornerRadius(12)
+            .cornerRadius(14)
 
             Divider().background(Color.white.opacity(0.15))
 
@@ -769,7 +828,7 @@ struct ContentView: View {
             }
         }
         .padding(18)
-        .liquidGlass(cornerRadius: 20)
+        .liquidGlass(cornerRadius: 22)
         .padding(.horizontal)
     }
 
