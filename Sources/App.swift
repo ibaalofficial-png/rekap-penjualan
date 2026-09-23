@@ -2,7 +2,6 @@ import SwiftUI
 import UIKit
 import Combine
 import UniformTypeIdentifiers
-import LocalAuthentication
 
 // MARK: - Format Helper Global
 struct AppFormatters {
@@ -459,7 +458,6 @@ struct LiquidPrismSwitch: View {
 // MARK: - Tampilan Utama
 struct ContentView: View {
     @Environment(\.openURL) private var openURL
-    @Environment(\.scenePhase) private var scenePhase
 
     @State private var items: [SaleItem] = []
     @State private var showAddModal = false
@@ -469,8 +467,6 @@ struct ContentView: View {
     @State private var timerNow = Date()
 
     @AppStorage("hideFinancials") private var hideFinancials: Bool = false
-    @AppStorage("useBiometrics") private var useBiometrics: Bool = false
-    @State private var isUnlocked: Bool = true
 
     @State private var expandedBatches: Set<Int> = []
     @State private var searchText = ""
@@ -562,99 +558,10 @@ struct ContentView: View {
     }
 
     var body: some View {
-        ZStack {
-            if useBiometrics && !isUnlocked {
-                lockScreenView
-            } else {
-                mainContentView
+        mainContentView
+            .onAppear {
+                loadData()
             }
-        }
-        .onAppear {
-            loadData()
-            if useBiometrics {
-                isUnlocked = false
-                authenticateUser()
-            }
-        }
-        .onChange(of: scenePhase) { newPhase in
-            if newPhase == .background || newPhase == .inactive {
-                if useBiometrics {
-                    isUnlocked = false
-                }
-            } else if newPhase == .active {
-                if useBiometrics && !isUnlocked {
-                    authenticateUser()
-                }
-            }
-        }
-    }
-
-    // MARK: - Layar Kunci Face ID
-    private var lockScreenView: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-
-            Circle()
-                .fill(Color.cyan.opacity(0.28))
-                .frame(width: 280, height: 280)
-                .blur(radius: 80)
-                .offset(y: -100)
-
-            VStack(spacing: 22) {
-                Image(systemName: "lock.shield.fill")
-                    .font(.system(size: 64))
-                    .foregroundColor(.cyan)
-                    .shadow(color: Color.cyan.opacity(0.6), radius: 16)
-
-                VStack(spacing: 6) {
-                    Text("Cert Manager Terkunci")
-                        .font(.system(size: 22, weight: .bold))
-                        .foregroundColor(.white)
-
-                    Text("Gunakan Face ID atau Kode Sandi untuk membuka data transaksi.")
-                        .font(.caption)
-                        .foregroundColor(.gray)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 40)
-                }
-
-                Button {
-                    authenticateUser()
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "faceid")
-                            .font(.system(size: 18, weight: .bold))
-                        Text("Buka Kunci")
-                            .font(.system(size: 15, weight: .bold))
-                    }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 28)
-                    .padding(.vertical, 12)
-                    .liquidGlass(cornerRadius: 14)
-                }
-                .buttonStyle(.plain)
-            }
-            .padding()
-        }
-    }
-
-    private func authenticateUser() {
-        let context = LAContext()
-        var error: NSError?
-
-        if context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) {
-            context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Buka data Cert Manager") { success, _ in
-                DispatchQueue.main.async {
-                    if success {
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                            self.isUnlocked = true
-                        }
-                    }
-                }
-            }
-        } else {
-            self.isUnlocked = true
-        }
     }
 
     // MARK: - Tampilan Utama Aplikasi
@@ -766,14 +673,6 @@ struct ContentView: View {
                             showEditBatchModal = true
                         } label: {
                             Label("Ubah Modal & Fee Admin", systemImage: "dollarsign.circle.fill")
-                        }
-                        Divider()
-                        Button {
-                            withAnimation {
-                                useBiometrics.toggle()
-                            }
-                        } label: {
-                            Label(useBiometrics ? "Matikan Kunci Face ID" : "Aktifkan Kunci Face ID", systemImage: useBiometrics ? "lock.slash.fill" : "faceid")
                         }
                         Divider()
                         Button {
@@ -1239,56 +1138,26 @@ struct ContentView: View {
     }
 
     private func copyLCSignTutorial(item: SaleItem) {
-        let pass = (item.certPassword?.isEmpty == false) ? item.certPassword! : "ibaalcert"
-        let garansiText = (item.durasiHari == 0) ? "Non-Garansi" : "\(item.durasiHari) Hari (s/d \(AppFormatters.date(item.expiredGaransiDate)))"
-
         let pesan = """
-        📱 *DETAIL CERT & PANDUAN INSTALASI (LCSIGN)*
-
-        Halo kak \(item.displayName)! Sertifikat pesananmu sudah aktif.
-        • Masa Garansi: \(garansiText)
-        • Password Cert: *\(pass)*
-
-        Silakan ikuti langkah instalasi berikut:
-
         1️⃣ *INSTAL APLIKASI LCSIGN*
-        • Buka tautan instalasi yang kami kirimkan di Safari, lalu klik "Install".
-        • Tunggu hingga ikon LCSign muncul dan selesai terpasang di layar utama.
+        • Buka tautan instalasi lewat Safari > klik "Install" > tunggu ikon muncul di layar utama.
+        • Pas pertama kali buka LCSign, kalau ada pop-up muncul, klik "Next" / "Agree" terus sampai masuk menu utama.
 
-        2️⃣ *AKTIFKAN DEVELOPER MODE (Khusus iOS 16+)*
-        • Buka Pengaturan iPhone > Privasi & Keamanan.
-        • Gulir ke baris paling bawah, pilih "Mode Pengembang" (Developer Mode).
-        • Aktifkan tombolnya, lalu pilih "Mulai Ulang" (Restart iPhone).
-        • Setelah iPhone menyala, konfirmasi dan masukkan kode sandi iPhone kamu.
+        2️⃣ *MODE PENGEMBANG (Khusus iOS 16+)*
+        Pengaturan > Privasi & Keamanan > gulir ke paling bawah > Mode Pengembang > Nyalakan > Restart iPhone.
 
         3️⃣ *SETELAN WAJIB LCSIGN*
-        Buka aplikasi LCSign > masuk menu "Settings" (kanan bawah) > pilih "App Configuration", lalu samakan setelannya:
+        Buka LCSign > menu Settings (kanan bawah) > App Configuration.
+        👉 *Samakan semua centangnya seperti foto screenshot yang dikirim di atas.*
 
-        ⚙️ *Signing Config:*
-        • Compression Level: Pilih [Maximum]
-        • Install After Signing: [NYALAKAN / HIJAU]
-        • Direct Plugin Injection: [NYALAKAN / HIJAU]
-        • Fix Dark Icon: [NYALAKAN / HIJAU]
-        (Opsi lainnya biarkan MATI / ABU-ABU)
+        4️⃣ *SELESAI*
+        Sertifikat sudah otomatis terpasang! LCSign langsung siap digunakan untuk pasang file IPA pilihanmu.
 
-        📁 *File Manager:*
-        • Import to workspace after download: [NYALAKAN / HIJAU]
-        • Delete downloaded file after import: [NYALAKAN / HIJAU]
-        • Auto-clean Imported Files: [NYALAKAN / HIJAU]
-        • Open .app Folders Directly: [NYALAKAN / HIJAU]
-
-        🌐 *Install Service:*
-        • Pilih [Server (Recommended)]
-        • Pada Install Services pilih [Automatic (Lowest Latency)]
-
-        4️⃣ *PASANG APLIKASI (.IPA)*
-        • Sekarang LCSign sudah siap digunakan untuk memasang dan menandatangani file IPA favorit kamu!
-
-        Jika ada kendala saat instalasi, silakan balas chat ini ya kak 🙌
+        Kalau ada kendala saat pasang, langsung balas chat ini ya kak 🙌
         """
 
         UIPasteboard.general.string = pesan
-        alertMessage = "Panduan instalasi LCSign untuk \(item.displayName) berhasil disalin ke papan klip!"
+        alertMessage = "Panduan instalasi LCSign berhasil disalin ke papan klip!"
         showAlert = true
     }
 
@@ -1424,7 +1293,6 @@ struct ContentView: View {
             items = decoded
             recalculateAndSave()
         } else if let autoSavedItems = AutoSaveManager.shared.loadAutoSave(), !autoSavedItems.isEmpty {
-            // Auto-Recovery jika memori lokal baru di-reset/install ulang
             items = autoSavedItems
             recalculateAndSave()
         }
