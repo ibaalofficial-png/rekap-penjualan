@@ -20,11 +20,11 @@ struct AppFormatters {
     }
 }
 
-// MARK: - Manajer Penyimpanan Modal per Kloter (Default: 0)
+// MARK: - Manajer Penyimpanan Modal per Kloter
 class BatchModalManager {
     static let shared = BatchModalManager()
     private let key = "saved_batch_modals"
-    private let defaultModal = 0 // Default NOL agar aman dan privasi modal terjaga
+    private let defaultModal = 0
 
     func getModal(for batch: Int) -> Int {
         let dict = UserDefaults.standard.dictionary(forKey: key) as? [String: Int] ?? [:]
@@ -34,6 +34,23 @@ class BatchModalManager {
     func setModal(for batch: Int, modal: Int) {
         var dict = UserDefaults.standard.dictionary(forKey: key) as? [String: Int] ?? [:]
         dict[String(batch)] = modal
+        UserDefaults.standard.set(dict, forKey: key)
+    }
+}
+
+// MARK: - Manajer Penyimpanan Potongan / Fee Admin per Kloter
+class BatchAdminFeeManager {
+    static let shared = BatchAdminFeeManager()
+    private let key = "saved_batch_admin_fees"
+
+    func getFee(for batch: Int) -> Int {
+        let dict = UserDefaults.standard.dictionary(forKey: key) as? [String: Int] ?? [:]
+        return dict[String(batch)] ?? 0
+    }
+
+    func setFee(for batch: Int, fee: Int) {
+        var dict = UserDefaults.standard.dictionary(forKey: key) as? [String: Int] ?? [:]
+        dict[String(batch)] = fee
         UserDefaults.standard.set(dict, forKey: key)
     }
 }
@@ -299,7 +316,7 @@ struct StatusGaransiView: View {
     }
 }
 
-// MARK: - Switch Gelembung Prisma Kaca Cair (Liquid Lens Switch)
+// MARK: - Switch Gelembung Prisma Kaca Cair
 struct LiquidPrismSwitch: View {
     @Binding var selected: FilterGaransi
     @Namespace private var lensAnimation
@@ -329,7 +346,7 @@ struct LiquidPrismSwitch: View {
                     lineWidth: 1.1
                 )
         )
-        .shadow(color: Color.black.opacity(0.5), radius: 18, y: 8)
+        .shadow(color: Color.black.opacity(0.5), radius: 18, x: 0, y: 8)
         .padding(.horizontal)
     }
 
@@ -437,14 +454,21 @@ struct ContentView: View {
     var slotTerjualDiBatchAktif: Int { activeBatchItems.count }
     var sisaSlotDiBatchAktif: Int { max(0, 5 - slotTerjualDiBatchAktif) }
 
+    // Hitungan Keuangan Kloter Aktif
     var modalKloterAktif: Int {
         BatchModalManager.shared.getModal(for: activeBatchNumber)
+    }
+    var feeAdminKloterAktif: Int {
+        BatchAdminFeeManager.shared.getFee(for: activeBatchNumber)
     }
     var omsetKloterAktif: Int {
         activeBatchItems.reduce(0) { $0 + $1.hargaJual }
     }
-    var untungKloterAktif: Int {
+    var labaKotorKloterAktif: Int {
         omsetKloterAktif - modalKloterAktif
+    }
+    var labaBersihOwnerAktif: Int {
+        labaKotorKloterAktif - feeAdminKloterAktif
     }
 
     var completedBatchesCount: Int {
@@ -605,7 +629,7 @@ struct ContentView: View {
                         Button {
                             showEditBatchModal = true
                         } label: {
-                            Label("Ubah Modal Kloter #\(activeBatchNumber)", systemImage: "dollarsign.circle.fill")
+                            Label("Ubah Modal & Fee Admin", systemImage: "dollarsign.circle.fill")
                         }
                         Divider()
                         Button {
@@ -681,9 +705,11 @@ struct ContentView: View {
             .sheet(isPresented: $showEditBatchModal) {
                 EditBatchModalSheet(
                     batchNumber: activeBatchNumber,
-                    currentModal: modalKloterAktif
-                ) { updatedModal in
+                    currentModal: modalKloterAktif,
+                    currentAdminFee: feeAdminKloterAktif
+                ) { updatedModal, updatedFee in
                     BatchModalManager.shared.setModal(for: activeBatchNumber, modal: updatedModal)
+                    BatchAdminFeeManager.shared.setFee(for: activeBatchNumber, fee: updatedFee)
                 }
             }
             .sheet(isPresented: $showHistoryModal) {
@@ -796,20 +822,30 @@ struct ContentView: View {
             }
 
             VStack(spacing: 3) {
-                Text(hideFinancials ? "Rp ••••••••" : (untungKloterAktif >= 0 ? "+\(AppFormatters.idr(untungKloterAktif))" : AppFormatters.idr(untungKloterAktif)))
+                // Keuntungan Bersih Owner
+                Text(hideFinancials ? "Rp ••••••••" : (labaBersihOwnerAktif >= 0 ? "+\(AppFormatters.idr(labaBersihOwnerAktif))" : AppFormatters.idr(labaBersihOwnerAktif)))
                     .font(.system(size: 34, weight: .heavy, design: .rounded))
-                    .foregroundColor(hideFinancials ? .gray : (untungKloterAktif >= 0 ? .green : .red))
-                    .shadow(color: hideFinancials ? .clear : (untungKloterAktif >= 0 ? Color.green.opacity(0.3) : Color.red.opacity(0.3)), radius: 10)
+                    .foregroundColor(hideFinancials ? .gray : (labaBersihOwnerAktif >= 0 ? .green : .red))
+                    .shadow(color: hideFinancials ? .clear : (labaBersihOwnerAktif >= 0 ? Color.green.opacity(0.3) : Color.red.opacity(0.3)), radius: 10)
 
-                // Keterangan Aman & Privasi Terjaga
                 if hideFinancials {
                     Text("Mode Sensor Finansial Aktif 🔒")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(.gray)
                 } else {
-                    Text(untungKloterAktif >= 0 ? "Keuntungan Bersih Kloter Ini" : "Belum Balik Modal (Kurang \(AppFormatters.idr(abs(untungKloterAktif))))")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(untungKloterAktif >= 0 ? .green.opacity(0.85) : .orange)
+                    if feeAdminKloterAktif > 0 {
+                        Text("Untung Bersih Kamu (Potong Admin \(AppFormatters.idr(feeAdminKloterAktif)))")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(.cyan.opacity(0.9))
+                    } else if modalKloterAktif > 0 && labaBersihOwnerAktif < 0 {
+                        Text("Belum Balik Modal (Kurang \(AppFormatters.idr(abs(labaBersihOwnerAktif))))")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.orange)
+                    } else {
+                        Text("Keuntungan Bersih Kloter Ini")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.green.opacity(0.85))
+                    }
                 }
             }
 
@@ -829,6 +865,10 @@ struct ContentView: View {
                     } label: {
                         HStack(spacing: 3) {
                             Text("Modal: \(hideFinancials ? "••••" : AppFormatters.idr(modalKloterAktif))")
+                            if feeAdminKloterAktif > 0 {
+                                Text("| Admin: \(hideFinancials ? "••••" : AppFormatters.idr(feeAdminKloterAktif))")
+                                    .foregroundColor(.orange)
+                            }
                             Image(systemName: "pencil")
                         }
                         .font(.caption2)
@@ -1192,8 +1232,12 @@ struct CompletedBatchCard: View {
         BatchModalManager.shared.getModal(for: batchNum)
     }
 
-    var untung: Int {
-        omset - modal
+    var feeAdmin: Int {
+        BatchAdminFeeManager.shared.getFee(for: batchNum)
+    }
+
+    var untungBersihOwner: Int {
+        (omset - modal) - feeAdmin
     }
 
     var body: some View {
@@ -1221,11 +1265,17 @@ struct CompletedBatchCard: View {
 
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Modal Paket:")
+                    Text("Modal:")
                         .font(.caption2)
                         .foregroundColor(.gray)
                     Text(hideFinancials ? "Rp ••••••" : AppFormatters.idr(modal))
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 12, weight: .semibold))
+
+                    if feeAdmin > 0 {
+                        Text("Fee Admin: \(hideFinancials ? "••••" : AppFormatters.idr(feeAdmin))")
+                            .font(.system(size: 10))
+                            .foregroundColor(.orange)
+                    }
                 }
                 Spacer()
                 VStack(alignment: .center, spacing: 3) {
@@ -1233,15 +1283,15 @@ struct CompletedBatchCard: View {
                         .font(.caption2)
                         .foregroundColor(.gray)
                     Text(hideFinancials ? "Rp ••••••" : AppFormatters.idr(omset))
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(.cyan)
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 3) {
-                    Text("Untung Bersih:")
+                    Text("Untung Owner:")
                         .font(.caption2)
                         .foregroundColor(.gray)
-                    Text(hideFinancials ? "Rp ••••••" : "+\(AppFormatters.idr(untung))")
+                    Text(hideFinancials ? "Rp ••••••" : "+\(AppFormatters.idr(untungBersihOwner))")
                         .font(.system(size: 13, weight: .bold))
                         .foregroundColor(.green)
                 }
@@ -1290,7 +1340,8 @@ struct BatchHistorySheet: View {
             let batchItems = allItems.filter { $0.batchNumber == batchNum }
             let omset = batchItems.reduce(0) { $0 + $1.hargaJual }
             let modal = BatchModalManager.shared.getModal(for: batchNum)
-            total += (omset - modal)
+            let fee = BatchAdminFeeManager.shared.getFee(for: batchNum)
+            total += ((omset - modal) - fee)
         }
         return total
     }
@@ -1303,7 +1354,7 @@ struct BatchHistorySheet: View {
                 ScrollView {
                     VStack(spacing: 16) {
                         VStack(spacing: 8) {
-                            Text("TOTAL KEUNTUNGAN BERSIH ARSIP")
+                            Text("TOTAL KEUNTUNGAN BERSIH OWNER")
                                 .font(.caption)
                                 .font(.system(size: 11, weight: .bold))
                                 .foregroundColor(.green.opacity(0.8))
@@ -1344,25 +1395,28 @@ struct BatchHistorySheet: View {
     }
 }
 
-// MARK: - Lembar Ubah Modal Kloter
+// MARK: - Lembar Ubah Modal & Potongan Admin Kloter
 struct EditBatchModalSheet: View {
     @Environment(\.dismiss) var dismiss
     var batchNumber: Int
     var currentModal: Int
-    var onSave: (Int) -> Void
+    var currentAdminFee: Int
+    var onSave: (Int, Int) -> Void
 
     @State private var modalText = ""
+    @State private var adminFeeText = ""
 
-    init(batchNumber: Int, currentModal: Int, onSave: @escaping (Int) -> Void) {
+    init(batchNumber: Int, currentModal: Int, currentAdminFee: Int, onSave: @escaping (Int, Int) -> Void) {
         self.batchNumber = batchNumber
         self.currentModal = currentModal
+        self.currentAdminFee = currentAdminFee
         self.onSave = onSave
     }
 
     var body: some View {
         NavigationView {
             Form {
-                Section(header: Text("Modal Kloter #\(batchNumber) (Paket 5 Cert)"), footer: Text("Atur modal kloter ini sesuai biaya yang kamu keluarkan.")) {
+                Section(header: Text("Modal Kloter #\(batchNumber) (Paket 5 Cert)"), footer: Text("Atur modal kloter ini sesuai biaya yang kamu keluarkan ke supplier.")) {
                     HStack {
                         Text("Modal Top-Up (Rp)")
                             .font(.system(size: 15, weight: .bold))
@@ -1373,17 +1427,29 @@ struct EditBatchModalSheet: View {
                             .foregroundColor(.cyan)
                     }
                 }
+
+                Section(header: Text("Potongan Bayar Admin"), footer: Text("Jika kloter ini dijualkan oleh admin lain, isi nominal gaji/komisi yang kamu berikan ke dia. Keuntungan bersih kamu otomatis terpotong nominal ini.")) {
+                    HStack {
+                        Text("Bayar Admin (Rp)")
+                            .font(.system(size: 15, weight: .bold))
+                        Spacer()
+                        TextField("0", text: $adminFeeText)
+                            .keyboardType(.numberPad)
+                            .multilineTextAlignment(.trailing)
+                            .foregroundColor(.orange)
+                    }
+                }
             }
-            .navigationTitle("Modal Kloter #\(batchNumber)")
+            .navigationTitle("Modal & Fee Admin #\(batchNumber)")
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Batal") { dismiss() }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
-                        if let val = Int(modalText) {
-                            onSave(val)
-                        }
+                        let m = Int(modalText) ?? 0
+                        let f = Int(adminFeeText) ?? 0
+                        onSave(m, f)
                         dismiss()
                     } label: {
                         Text("Simpan")
@@ -1394,6 +1460,7 @@ struct EditBatchModalSheet: View {
             }
             .onAppear {
                 modalText = String(currentModal)
+                adminFeeText = String(currentAdminFee)
             }
         }
     }
