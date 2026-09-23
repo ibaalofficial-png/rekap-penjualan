@@ -38,7 +38,7 @@ class BatchModalManager {
     }
 }
 
-// MARK: - Manajer Penyimpanan Potongan / Fee Admin per Kloter
+// MARK: - Manajer Penyimpanan Potongan Fee Admin per Kloter
 class BatchAdminFeeManager {
     static let shared = BatchAdminFeeManager()
     private let key = "saved_batch_admin_fees"
@@ -316,7 +316,7 @@ struct StatusGaransiView: View {
     }
 }
 
-// MARK: - Switch Gelembung Prisma Kaca Cair
+// MARK: - Switch Gelembung Prisma Kaca Cair (Liquid Lens Switch)
 struct LiquidPrismSwitch: View {
     @Binding var selected: FilterGaransi
     @Namespace private var lensAnimation
@@ -454,7 +454,6 @@ struct ContentView: View {
     var slotTerjualDiBatchAktif: Int { activeBatchItems.count }
     var sisaSlotDiBatchAktif: Int { max(0, 5 - slotTerjualDiBatchAktif) }
 
-    // Hitungan Keuangan Kloter Aktif
     var modalKloterAktif: Int {
         BatchModalManager.shared.getModal(for: activeBatchNumber)
     }
@@ -822,7 +821,6 @@ struct ContentView: View {
             }
 
             VStack(spacing: 3) {
-                // Keuntungan Bersih Owner
                 Text(hideFinancials ? "Rp ••••••••" : (labaBersihOwnerAktif >= 0 ? "+\(AppFormatters.idr(labaBersihOwnerAktif))" : AppFormatters.idr(labaBersihOwnerAktif)))
                     .font(.system(size: 34, weight: .heavy, design: .rounded))
                     .foregroundColor(hideFinancials ? .gray : (labaBersihOwnerAktif >= 0 ? .green : .red))
@@ -982,48 +980,64 @@ struct ContentView: View {
                 }
             }
 
-            if item.hasCertZip || (item.certPassword != nil && !item.certPassword!.isEmpty) {
-                HStack(spacing: 8) {
-                    if item.hasCertZip {
-                        Button {
-                            shareCertZip(item: item)
-                        } label: {
-                            Label("Kirim ZIP Cert 📦", systemImage: "doc.zipper")
-                                .font(.system(size: 11, weight: .bold))
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(Color.cyan.opacity(0.18))
-                                .foregroundColor(.cyan)
-                                .cornerRadius(8)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(Color.cyan.opacity(0.3), lineWidth: 1)
-                                )
-                        }
-                    }
-
-                    if let pass = item.certPassword, !pass.isEmpty {
-                        Button {
-                            UIPasteboard.general.string = pass
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "key.fill")
-                                Text("Pass: \(hideFinancials ? "••••" : pass)")
-                            }
-                            .font(.system(size: 11, weight: .semibold))
-                            .padding(.horizontal, 8)
+            // Tombol Aksi Cepat: Kirim ZIP, Password, dan Panduan LCSign
+            HStack(spacing: 8) {
+                if item.hasCertZip {
+                    Button {
+                        shareCertZip(item: item)
+                    } label: {
+                        Label("ZIP Cert", systemImage: "doc.zipper")
+                            .font(.system(size: 11, weight: .bold))
+                            .padding(.horizontal, 9)
                             .padding(.vertical, 6)
-                            .background(Color.yellow.opacity(0.15))
-                            .foregroundColor(.yellow)
+                            .background(Color.cyan.opacity(0.18))
+                            .foregroundColor(.cyan)
                             .cornerRadius(8)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 8)
-                                    .stroke(Color.yellow.opacity(0.25), lineWidth: 1)
+                                    .stroke(Color.cyan.opacity(0.3), lineWidth: 1)
                             )
-                        }
                     }
-                    Spacer()
                 }
+
+                // Tombol Salin Format Panduan LCSign ke WhatsApp
+                Button {
+                    copyLCSignTutorial(item: item)
+                } label: {
+                    Label("Panduan LCSign 📋", systemImage: "doc.on.clipboard.fill")
+                        .font(.system(size: 11, weight: .bold))
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 6)
+                        .background(Color.green.opacity(0.18))
+                        .foregroundColor(.green)
+                        .cornerRadius(8)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.green.opacity(0.3), lineWidth: 1)
+                        )
+                }
+
+                if let pass = item.certPassword, !pass.isEmpty {
+                    Button {
+                        UIPasteboard.general.string = pass
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "key.fill")
+                            Text("Pass: \(hideFinancials ? "••••" : pass)")
+                        }
+                        .font(.system(size: 11, weight: .semibold))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                        .background(Color.yellow.opacity(0.15))
+                        .foregroundColor(.yellow)
+                        .cornerRadius(8)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.yellow.opacity(0.25), lineWidth: 1)
+                        )
+                    }
+                }
+                Spacer()
             }
 
             VStack(alignment: .leading, spacing: 5) {
@@ -1085,6 +1099,61 @@ struct ContentView: View {
         .padding(16)
         .liquidGlass(cornerRadius: 18)
         .padding(.horizontal)
+    }
+
+    // Fungsi Salin Pesan Panduan LCSign Siap Kirim
+    private func copyLCSignTutorial(item: SaleItem) {
+        let pass = (item.certPassword?.isEmpty == false) ? item.certPassword! : "ibaalcert"
+        let garansiText = (item.durasiHari == 0) ? "Non-Garansi" : "\(item.durasiHari) Hari (s/d \(AppFormatters.date(item.expiredGaransiDate)))"
+
+        let pesan = """
+        📱 *DETAIL CERT & PANDUAN INSTALASI (LCSIGN)*
+
+        Halo kak \(item.displayName)! Sertifikat pesananmu sudah aktif.
+        • Masa Garansi: \(garansiText)
+        • Password Cert: *\(pass)*
+
+        Silakan ikuti langkah instalasi berikut:
+
+        1️⃣ *INSTAL APLIKASI LCSIGN*
+        • Buka tautan instalasi yang kami kirimkan di Safari, lalu klik "Install".
+        • Tunggu hingga ikon LCSign muncul dan selesai terpasang di layar utama.
+
+        2️⃣ *AKTIFKAN DEVELOPER MODE (Khusus iOS 16+)*
+        • Buka Pengaturan iPhone > Privasi & Keamanan.
+        • Gulir ke baris paling bawah, pilih "Mode Pengembang" (Developer Mode).
+        • Aktifkan tombolnya, lalu pilih "Mulai Ulang" (Restart iPhone).
+        • Setelah iPhone menyala, konfirmasi dan masukkan kode sandi iPhone kamu.
+
+        3️⃣ *SETELAN WAJIB LCSIGN*
+        Buka aplikasi LCSign > masuk menu "Settings" (kanan bawah) > pilih "App Configuration", lalu samakan setelannya:
+
+        ⚙️ *Signing Config:*
+        • Compression Level: Pilih [Maximum]
+        • Install After Signing: [NYALAKAN / HIJAU]
+        • Direct Plugin Injection: [NYALAKAN / HIJAU]
+        • Fix Dark Icon: [NYALAKAN / HIJAU]
+        (Opsi lainnya biarkan MATI / ABU-ABU)
+
+        📁 *File Manager:*
+        • Import to workspace after download: [NYALAKAN / HIJAU]
+        • Delete downloaded file after import: [NYALAKAN / HIJAU]
+        • Auto-clean Imported Files: [NYALAKAN / HIJAU]
+        • Open .app Folders Directly: [NYALAKAN / HIJAU]
+
+        🌐 *Install Service:*
+        • Pilih [Server (Recommended)]
+        • Pada Install Services pilih [Automatic (Lowest Latency)]
+
+        4️⃣ *PASANG APLIKASI (.IPA)*
+        • Sekarang LCSign sudah siap digunakan untuk memasang dan menandatangani file IPA favorit kamu!
+
+        Jika ada kendala saat instalasi, silakan balas chat ini ya kak 🙌
+        """
+
+        UIPasteboard.general.string = pesan
+        alertMessage = "Panduan instalasi LCSign untuk \(item.displayName) berhasil disalin ke papan klip! Tinggal tempel (paste) ke WhatsApp pembeli."
+        showAlert = true
     }
 
     private func maskUDID(_ u: String) -> String {
