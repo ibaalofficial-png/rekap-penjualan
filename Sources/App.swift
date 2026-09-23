@@ -2,6 +2,7 @@ import SwiftUI
 import UIKit
 import Combine
 import UniformTypeIdentifiers
+import LocalAuthentication
 
 // MARK: - Format Helper Global
 struct AppFormatters {
@@ -17,6 +18,41 @@ struct AppFormatters {
         let f = DateFormatter()
         f.dateFormat = "dd/MM/yyyy"
         return f.string(from: d)
+    }
+}
+
+// MARK: - Manajer Auto-Save & Pemulihan Dokumen
+class AutoSaveManager {
+    static let shared = AutoSaveManager()
+
+    private var autoBackupURL: URL {
+        let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+        return paths[0].appendingPathComponent("CertManager_AutoBackup.json")
+    }
+
+    func save(_ items: [SaleItem]) {
+        DispatchQueue.global(qos: .background).async {
+            do {
+                let encoder = JSONEncoder()
+                encoder.outputFormatting = .prettyPrinted
+                let data = try encoder.encode(items)
+                try data.write(to: self.autoBackupURL, options: .atomic)
+            } catch {
+                #if DEBUG
+                print("AutoSave gagal: \(error.localizedDescription)")
+                #endif
+            }
+        }
+    }
+
+    func loadAutoSave() -> [SaleItem]? {
+        guard FileManager.default.fileExists(atPath: autoBackupURL.path) else { return nil }
+        do {
+            let data = try Data(contentsOf: autoBackupURL)
+            return try JSONDecoder().decode([SaleItem].self, from: data)
+        } catch {
+            return nil
+        }
     }
 }
 
@@ -423,6 +459,8 @@ struct LiquidPrismSwitch: View {
 // MARK: - Tampilan Utama
 struct ContentView: View {
     @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
+
     @State private var items: [SaleItem] = []
     @State private var showAddModal = false
     @State private var showHistoryModal = false
@@ -431,8 +469,10 @@ struct ContentView: View {
     @State private var timerNow = Date()
 
     @AppStorage("hideFinancials") private var hideFinancials: Bool = false
-    @State private var expandedBatches: Set<Int> = []
+    @AppStorage("useBiometrics") private var useBiometrics: Bool = false
+    @State private var isUnlocked: Bool = true
 
+    @State private var expandedBatches: Set<Int> = []
     @State private var searchText = ""
     @State private var selectedFilter: FilterGaransi = .semua
 
@@ -522,6 +562,103 @@ struct ContentView: View {
     }
 
     var body: some View {
+        ZStack {
+            if useBiometrics && !isUnlocked {
+                lockScreenView
+            } else {
+                mainContentView
+            }
+        }
+        .onAppear {
+            loadData()
+            if useBiometrics {
+                isUnlocked = false
+                authenticateUser()
+            }
+        }
+        .onChange(of: scenePhase) { newPhase in
+            if newPhase == .background || newPhase == .inactive {
+                if useBiometrics {
+                    isUnlocked = false
+                }
+            } else if newPhase == .active {
+                if useBiometrics && !isUnlocked {
+                    authenticateUser()
+                }
+            }
+        }
+    }
+
+    // MARK: - Layar Kunci Face ID
+    private var lockScreenView: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            Circle()
+                .fill(Color.cyan.opacity(0.28))
+                .frame(width: 280, height: 280)
+                .blur(radius: 80)
+                .offset(y: -100)
+
+            VStack(spacing: 22) {
+                Image(systemName: "lock.shield.fill")
+                    .font(.system(size: 64))
+                    .foregroundColor(.cyan)
+                    .shadow(color: Color.cyan.opacity(0.6), radius: 16)
+
+                VStack(spacing: 6) {
+                    Text("Cert Manager Terkunci")
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundColor(.white)
+
+                    Text("Gunakan Face ID atau Kode Sandi untuk membuka data transaksi.")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 40)
+                }
+
+                Button {
+                    authenticateUser()
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "faceid")
+                            .font(.system(size: 18, weight: .bold))
+                        Text("Buka Kunci")
+                            .font(.system(size: 15, weight: .bold))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 28)
+                    .padding(.vertical, 12)
+                    .liquidGlass(cornerRadius: 14)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding()
+        }
+    }
+
+    private func authenticateUser() {
+        let context = LAContext()
+        var error: NSError?
+
+        if context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) {
+            context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Buka data Cert Manager") { success, _ in
+                DispatchQueue.main.async {
+                    if success {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                            self.isUnlocked = true
+                        }
+                    }
+                }
+            }
+        } else {
+            self.isUnlocked = true
+        }
+    }
+
+    // MARK: - Tampilan Utama Aplikasi
+    private var mainContentView: some View {
         NavigationView {
             ZStack {
                 Color.black.ignoresSafeArea()
@@ -632,9 +769,17 @@ struct ContentView: View {
                         }
                         Divider()
                         Button {
+                            withAnimation {
+                                useBiometrics.toggle()
+                            }
+                        } label: {
+                            Label(useBiometrics ? "Matikan Kunci Face ID" : "Aktifkan Kunci Face ID", systemImage: useBiometrics ? "lock.slash.fill" : "faceid")
+                        }
+                        Divider()
+                        Button {
                             exportBackup()
                         } label: {
-                            Label("Cadangkan Data (Backup)", systemImage: "square.and.arrow.up")
+                            Label("Cadangkan Data (Manual)", systemImage: "square.and.arrow.up")
                         }
                         Button {
                             showFileImporter = true
@@ -729,12 +874,6 @@ struct ContentView: View {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(alertMessage)
-            }
-            .onAppear {
-                loadData()
-                if expandedBatches.isEmpty {
-                    expandedBatches.insert(activeBatchNumber)
-                }
             }
             .onReceive(timer) { input in
                 timerNow = input
@@ -980,7 +1119,6 @@ struct ContentView: View {
                 }
             }
 
-            // Tombol Aksi Cepat: Kirim ZIP, Password, dan Panduan LCSign
             HStack(spacing: 8) {
                 if item.hasCertZip {
                     Button {
@@ -1000,7 +1138,6 @@ struct ContentView: View {
                     }
                 }
 
-                // Tombol Salin Format Panduan LCSign ke WhatsApp
                 Button {
                     copyLCSignTutorial(item: item)
                 } label: {
@@ -1101,7 +1238,6 @@ struct ContentView: View {
         .padding(.horizontal)
     }
 
-    // Fungsi Salin Pesan Panduan LCSign Siap Kirim
     private func copyLCSignTutorial(item: SaleItem) {
         let pass = (item.certPassword?.isEmpty == false) ? item.certPassword! : "ibaalcert"
         let garansiText = (item.durasiHari == 0) ? "Non-Garansi" : "\(item.durasiHari) Hari (s/d \(AppFormatters.date(item.expiredGaransiDate)))"
@@ -1152,7 +1288,7 @@ struct ContentView: View {
         """
 
         UIPasteboard.general.string = pesan
-        alertMessage = "Panduan instalasi LCSign untuk \(item.displayName) berhasil disalin ke papan klip! Tinggal tempel (paste) ke WhatsApp pembeli."
+        alertMessage = "Panduan instalasi LCSign untuk \(item.displayName) berhasil disalin ke papan klip!"
         showAlert = true
     }
 
@@ -1273,15 +1409,23 @@ struct ContentView: View {
 
         items = fixedItems.sorted { $0.tanggalDaftar > $1.tanggalDaftar }
 
+        // Simpan ke UserDefaults
         if let encoded = try? JSONEncoder().encode(items) {
             UserDefaults.standard.set(encoded, forKey: "saved_sales")
         }
+
+        // Auto-Save otomatis ke berkas dokumen
+        AutoSaveManager.shared.save(items)
     }
 
     private func loadData() {
         if let data = UserDefaults.standard.data(forKey: "saved_sales"),
            let decoded = try? JSONDecoder().decode([SaleItem].self, from: data) {
             items = decoded
+            recalculateAndSave()
+        } else if let autoSavedItems = AutoSaveManager.shared.loadAutoSave(), !autoSavedItems.isEmpty {
+            // Auto-Recovery jika memori lokal baru di-reset/install ulang
+            items = autoSavedItems
             recalculateAndSave()
         }
     }
