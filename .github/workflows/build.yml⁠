@@ -1,19 +1,15 @@
-name: Build iBaalSales IPA
+name: Build IPA
 
 on:
   push:
-    branches:
-      - main
-      - master
+    branches: [ main, master ]
   workflow_dispatch:
 
 jobs:
-  build-ipa:
-    name: Compile & Package IPA
+  build:
     runs-on: macos-14
-
     steps:
-      - name: Checkout Repo
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Install XcodeGen
@@ -22,26 +18,28 @@ jobs:
       - name: Generate Xcode Project
         run: xcodegen generate
 
-      - name: Build App
+      - name: Build Application Archive
         run: |
-          xcodebuild -project iBaalSales.xcodeproj \
-            -scheme iBaalSales \
+          xcodebuild -project CertManager.xcodeproj \
+            -scheme CertManager \
             -configuration Release \
-            -destination 'generic/platform=iOS' \
-            -archivePath build/iBaalSales.xcarchive \
-            archive \
-            CODE_SIGNING_ALLOWED=NO \
+            -sdk iphoneos \
+            -archivePath build/CertManager.xcarchive \
+            CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY=""
+            CODE_SIGNING_ALLOWED=NO \
+            archive
 
-      - name: Package Payload to IPA
+      - name: Package Payload into IPA
         run: |
-          mkdir -p Payload
-          cp -r build/iBaalSales.xcarchive/Products/Applications/iBaalSales.app Payload/
-          zip -r iBaalSales.ipa Payload
+          mkdir -p build/Payload
+          cp -r build/CertManager.xcarchive/Products/Applications/CertManager.app build/Payload/
+          cd build
+          zip -r CertManager.ipa Payload
+          cd ..
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: iBaalSales-IPA
-          path: iBaalSales.ipa
+          name: CertManager-IPA
+          path: build/CertManager.ipa
