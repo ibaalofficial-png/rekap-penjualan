@@ -469,6 +469,7 @@ struct ContentView: View {
     @State private var showAddModal = false
     @State private var showHistoryModal = false
     @State private var showEditBatchModal = false
+    @State private var showOptionsMenu = false
     @State private var itemToEdit: SaleItem? = nil
     @State private var timerNow = Date()
 
@@ -485,6 +486,27 @@ struct ContentView: View {
     @State private var showAlert = false
 
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
+    init() {
+        let appearance = UINavigationBarAppearance()
+        appearance.configureWithTransparentBackground()
+        
+        let largeFont = UIFont(name: "Mali-Bold", size: 28) ?? UIFont.systemFont(ofSize: 28, weight: .bold)
+        let inlineFont = UIFont(name: "Mali-Bold", size: 18) ?? UIFont.systemFont(ofSize: 18, weight: .bold)
+        
+        appearance.largeTitleTextAttributes = [
+            .font: largeFont,
+            .foregroundColor: UIColor.white
+        ]
+        appearance.titleTextAttributes = [
+            .font: inlineFont,
+            .foregroundColor: UIColor.white
+        ]
+        
+        UINavigationBar.appearance().standardAppearance = appearance
+        UINavigationBar.appearance().compactAppearance = appearance
+        UINavigationBar.appearance().scrollEdgeAppearance = appearance
+    }
 
     var activeBatchNumber: Int {
         items.isEmpty ? 1 : ((items.count - 1) / 5 + 1)
@@ -664,32 +686,105 @@ struct ContentView: View {
                     }
                     .padding(.vertical)
                 }
+
+                // MARK: - Dropdown Menu Titik Tiga Kustom (Font Mali-Bold)
+                if showOptionsMenu {
+                    Color.black.opacity(0.4)
+                        .ignoresSafeArea()
+                        .onTapGesture {
+                            withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
+                                showOptionsMenu = false
+                            }
+                        }
+
+                    VStack {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 5) {
+                                Button {
+                                    withAnimation { showOptionsMenu = false }
+                                    showHistoryModal = true
+                                } label: {
+                                    HStack(spacing: 10) {
+                                        Image(systemName: "archivebox.fill").foregroundColor(.green)
+                                        Text("Arsip Kloter Selesai")
+                                            .font(.mali(13))
+                                            .foregroundColor(.white)
+                                    }
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 10)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+
+                                Button {
+                                    withAnimation { showOptionsMenu = false }
+                                    showEditBatchModal = true
+                                } label: {
+                                    HStack(spacing: 10) {
+                                        Image(systemName: "dollarsign.circle.fill").foregroundColor(.cyan)
+                                        Text("Ubah Modal & Fee Admin")
+                                            .font(.mali(13))
+                                            .foregroundColor(.white)
+                                    }
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 10)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+
+                                Divider().background(Color.white.opacity(0.15))
+
+                                Button {
+                                    withAnimation { showOptionsMenu = false }
+                                    exportBackup()
+                                } label: {
+                                    HStack(spacing: 10) {
+                                        Image(systemName: "square.and.arrow.up").foregroundColor(.yellow)
+                                        Text("Cadangkan Data (Manual)")
+                                            .font(.mali(13))
+                                            .foregroundColor(.white)
+                                    }
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 10)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+
+                                Button {
+                                    withAnimation { showOptionsMenu = false }
+                                    showFileImporter = true
+                                } label: {
+                                    HStack(spacing: 10) {
+                                        Image(systemName: "square.and.arrow.down").foregroundColor(.orange)
+                                        Text("Pulihkan Data (Restore)")
+                                            .font(.mali(13))
+                                            .foregroundColor(.white)
+                                    }
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 10)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                            }
+                            .padding(6)
+                            .frame(width: 255)
+                            .liquidGlass(cornerRadius: 18)
+                            .padding(.leading, 16)
+                            .padding(.top, 10)
+                            Spacer()
+                        }
+                        Spacer()
+                    }
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .scale(scale: 0.92, anchor: .topLeading)),
+                        removal: .opacity
+                    ))
+                    .zIndex(99)
+                }
             }
-            .navigationTitle("Cert Manager ⚡")
+            .navigationTitle("ibaal cert store")
             .searchable(text: $searchText, prompt: "Cari nama, UDID, tipe HP...")
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Menu {
-                        Button {
-                            showHistoryModal = true
-                        } label: {
-                            Label("Arsip Kloter Selesai", systemImage: "archivebox.fill")
-                        }
-                        Button {
-                            showEditBatchModal = true
-                        } label: {
-                            Label("Ubah Modal & Fee Admin", systemImage: "dollarsign.circle.fill")
-                        }
-                        Divider()
-                        Button {
-                            exportBackup()
-                        } label: {
-                            Label("Cadangkan Data (Manual)", systemImage: "square.and.arrow.up")
-                        }
-                        Button {
-                            showFileImporter = true
-                        } label: {
-                            Label("Pulihkan Data (Restore)", systemImage: "square.and.arrow.down")
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                            showOptionsMenu.toggle()
                         }
                     } label: {
                         Image(systemName: "ellipsis.circle.fill")
@@ -900,21 +995,6 @@ struct ContentView: View {
                     .foregroundColor(slotTerjualDiBatchAktif >= 5 ? .green : .white)
 
                     Spacer()
-
-                    Button {
-                        showEditBatchModal = true
-                    } label: {
-                        HStack(spacing: 3) {
-                            Text("Modal: \(hideFinancials ? "••••" : AppFormatters.idr(modalKloterAktif))")
-                            if feeAdminKloterAktif > 0 {
-                                Text("| Admin: \(hideFinancials ? "••••" : AppFormatters.idr(feeAdminKloterAktif))")
-                                    .foregroundColor(.orange)
-                            }
-                            Image(systemName: "pencil")
-                        }
-                        .font(.mali(11))
-                        .foregroundColor(.cyan)
-                    }
                 }
 
                 GeometryReader { geo in
